@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CATS, mismatches, type Category, type Fields, type Shipment } from "@/lib/shipments";
+import { CATS, type Category, type Fields, type Shipment } from "@/lib/shipments";
 import { Icon } from "./Icon";
 import ReviewModal from "./ReviewModal";
 
@@ -26,7 +26,7 @@ const FILTERS: { key: Filter; label: string; c: string; a: string }[] = [
   { key: "new-si", label: "SI Requests", c: "#7e22ce", a: "#9333ea" },
   { key: "invoice", label: "Invoices", c: "#b45309", a: "#d97706" },
   { key: "general", label: "General", c: "#525252", a: "#334155" },
-  { key: "spam", label: "Spam", c: "#be123c", a: "#e11d48" },
+  { key: "other", label: "Other", c: "#be123c", a: "#e11d48" },
 ];
 
 const SUBS: { key: Sub; c: string; a: string; t: string }[] = [
@@ -43,6 +43,7 @@ const compare = (a: Shipment, b: Shipment, key: SortKey) => {
 
 export default function Dashboard() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [filter, setFilter] = useState<Filter>("all");
   const [sub, setSub] = useState<Sub>("all");
   const [query, setQuery] = useState("");
@@ -56,6 +57,29 @@ export default function Dashboard() {
   const timer = useRef<number>(undefined);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // ponytail: 30s poll; swap for SSE/onSnapshot if latency matters.
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/emails");
+        if (!res.ok) throw new Error(await res.text());
+        const data: Shipment[] = await res.json();
+        if (!alive) return;
+        setShipments(data);
+        setLoadState("ready");
+      } catch {
+        if (alive) setLoadState((s) => (s === "ready" ? s : "error"));
+      }
+    };
+    load();
+    const poll = window.setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(poll);
+    };
+  }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -94,25 +118,21 @@ export default function Dashboard() {
 
   const selected = shipments.find((s) => s.id === openId) ?? null;
 
-  // Deterministic 7-field comparison: any differing field flags the shipment for human review.
-  const save = (s: Shipment, fields: Fields) => {
-    const status = mismatches(fields, s.referenceFields!).length ? "discrepancy" : "clean";
-    setShipments((all) =>
-      all.map((x) =>
-        x.id === s.id
-          ? {
-              ...x,
-              status,
-              extractedFields: fields,
-              auditTrail: [
-                ...x.auditTrail,
-                { time: "Just now", action: `Manual verification (${status === "clean" ? "All matched & cleared" : "Saved manual override"})` },
-              ],
-            }
-          : x,
-      ),
-    );
-    showToast(`Saved verified fields for ${s.id}`);
+  // Server runs the deterministic 7-field comparison and returns the updated shipment.
+  const save = async (s: Shipment, fields: Fields) => {
+    try {
+      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
+      const updated: Shipment = await res.json();
+      setShipments((all) => all.map((x) => (x.id === s.id ? updated : x)));
+      showToast(`Saved verified fields for ${s.id}`);
+    } catch (e) {
+      showToast(`Save failed: ${(e as Error).message}`);
+    }
   };
 
   return (
@@ -319,7 +339,9 @@ export default function Dashboard() {
                 <tbody>
                   {rows.length === 0 && (
                     <tr className="empty">
-                      <td colSpan={8}>No shipments match your filter criteria.</td>
+                      <td colSpan={8}>
+                        {loadState === "loading" ? "Loading shipments…" : loadState === "error" ? "Could not load shipments from Firestore." : "No shipments match your filter criteria."}
+                      </td>
                     </tr>
                   )}
                   {rows.map((s) => {
@@ -362,7 +384,6 @@ export default function Dashboard() {
                             </span>
                           )}
                           {s.status === "pending" && <span className="muted">Received</span>}
-                          {s.status === "spam" && <span className="muted faint">Filtered</span>}
                         </td>
                         <td className="action">
                           <button
