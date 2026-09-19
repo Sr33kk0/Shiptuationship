@@ -25,11 +25,10 @@ Firestore Google
 - Might consider logging every email into database from classification in dashboard
 - Change all attachment and email into PDF for easy viewing
 
-1. Change Google sheet into Supabase
-2. Backend to fetch from Supabase and compare
+1. Backend to fetch from Firestore and compare
     - Discrepency: Flag field proem - Toggle Human Review Status
     Else: Toggle Cleared Status
-3. Frontend ( Dashboard Saas Style )
+2. Frontend ( Dashboard Saas Style )
     - Human Review Section
 	  - Allow full manual input to change field and save to database
 	- Email + Attachment Viewing - in PDF standardized form

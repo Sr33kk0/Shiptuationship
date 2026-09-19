@@ -710,6 +710,78 @@
       ],
       "id": "86da32aa-8ac7-434e-bc96-60835d46ddcb",
       "name": "Validate Classification"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents/emails/' + encodeURIComponent($json.fields?.email_id?.stringValue ?? $json.name?.split('/').pop()) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5520,
+        -640
+      ],
+      "id": "d3a1f2b4-8c9e-4d5f-a6b7-c8d9e0f12345",
+      "name": "Read Email Doc",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const fields = $json.fields ?? {};\nconst email_id = fields.email_id?.stringValue ?? '';\nconst classification = fields.classification?.stringValue ?? '';\nconst blMap = fields.bl?.mapValue?.fields;\nconst siMap = fields.si?.mapValue?.fields;\nif (!blMap || !siMap) {\n  const isComparisonReq = classification === 'Document-Comparison Request';\n  return { json: {\n    email_id,\n    firestore_document: { fields: {\n      comparison: { mapValue: { fields: {\n        status: { stringValue: 'incomplete' },\n        performed_at: { timestampValue: new Date().toISOString() },\n        discrepancies: { arrayValue: { values: [] } },\n      } } },\n      human_review_required: { booleanValue: isComparisonReq },\n      status: { stringValue: isComparisonReq ? 'incomplete' : (fields.status?.stringValue ?? 'pending') },\n    } },\n  } };\n}\nconst fieldNames = ['shipper', 'consignee', 'notify_party', 'port_of_loading', 'port_of_discharge', 'container_count', 'gross_weight_kg'];\nfunction getValue(map, name) {\n  const f = map[name];\n  if (!f) return null;\n  if (f.stringValue !== undefined) return f.stringValue;\n  if (f.integerValue !== undefined) return Number(f.integerValue);\n  if (f.doubleValue !== undefined) return f.doubleValue;\n  if (f.nullValue !== undefined) return null;\n  return null;\n}\nfunction valuesMatch(name, bv, sv) {\n  if (bv === null && sv === null) return true;\n  if (bv === null || sv === null) return false;\n  if (typeof bv === 'string' && typeof sv === 'string') return bv.trim().toLowerCase() === sv.trim().toLowerCase();\n  if (typeof bv === 'number' && typeof sv === 'number') {\n    if (name === 'container_count') return bv === sv;\n    if (bv === 0 && sv === 0) return true;\n    return (Math.abs(bv - sv) / Math.max(Math.abs(bv), Math.abs(sv))) <= 0.005;\n  }\n  return String(bv).trim().toLowerCase() === String(sv).trim().toLowerCase();\n}\nfunction toFV(v) {\n  if (v === null) return { nullValue: null };\n  if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };\n  return { stringValue: String(v) };\n}\nconst compFields = {};\nconst discrepancies = [];\nfor (const name of fieldNames) {\n  const bv = getValue(blMap, name);\n  const sv = getValue(siMap, name);\n  const match = valuesMatch(name, bv, sv);\n  if (!match) discrepancies.push(name);\n  compFields[name] = { mapValue: { fields: { match: { booleanValue: match }, bl: toFV(bv), si: toFV(sv) } } };\n}\nconst hasDisc = discrepancies.length > 0;\nreturn { json: {\n  email_id,\n  firestore_document: { fields: {\n    comparison: { mapValue: { fields: {\n      status: { stringValue: hasDisc ? 'flagged' : 'cleared' },\n      performed_at: { timestampValue: new Date().toISOString() },\n      discrepancies: { arrayValue: { values: discrepancies.map(d => ({ stringValue: d })) } },\n      fields: { mapValue: { fields: compFields } },\n    } } },\n    human_review_required: { booleanValue: hasDisc },\n    status: { stringValue: hasDisc ? 'flagged' : 'cleared' },\n  } },\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5920,
+        -640
+      ],
+      "id": "e4b2f3c5-9d0e-4e6f-b7c8-d9e0f1234567",
+      "name": "Compare Fields"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents/emails/' + encodeURIComponent($json.email_id) + '?' + Object.keys($json.firestore_document.fields).map(field => 'updateMask.fieldPaths=' + encodeURIComponent(field)).join('&') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.firestore_document }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6320,
+        -640
+      ],
+      "id": "f5c3f4d6-0e1f-4f7f-c8d9-e0f12345678a",
+      "name": "Write Comparison",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      }
     }
   ],
   "connections": {
@@ -1088,7 +1160,13 @@
     },
     "Loop Attachments": {
       "main": [
-        [],
+        [
+          {
+            "node": "Read Email Doc",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Find Attachment",
@@ -1176,6 +1254,28 @@
         [
           {
             "node": "Prepare Email Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Email Doc": {
+      "main": [
+        [
+          {
+            "node": "Compare Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Fields": {
+      "main": [
+        [
+          {
+            "node": "Write Comparison",
             "type": "main",
             "index": 0
           }
