@@ -1,31 +1,48 @@
-# File Structure 
+## Front-end
 
-document-verification-saas/
-├── frontend/                 # React + Vite (SaaS Dashboard)
-│   ├── public/
-│   ├── src/
-│   │   ├── assets/           # Modern UI/UX assets, sleek icons
-│   │   ├── components/       # Reusable UI (DocumentViewer, StatusBadge)
-│   │   ├── pages/            # Dashboard, HumanReviewQueue, EmailDetail
-│   │   ├── services/         # API calls to FastAPI
-│   │   ├── store/            # State management (Zustand/Redux)
-│   │   └── App.jsx
-│   ├── package.json
-│   └── vite.config.js
-│
-├── backend/                  # FastAPI + Python Logic
-│   ├── app/
-│   │   ├── api/              # Endpoints (e.g., /submit, /compare, /review)
-│   │   ├── core/             # Configuration, Supabase client init
-│   │   ├── models/           # Pydantic schemas (SI/BL data validation)
-│   │   ├── services/         # Comparison logic, PDF/OCR processing scripts
-│   │   └── main.py           # FastAPI application entry point
-│   ├── tests/                # Unit tests for the deterministic comparison
-│   └── requirements.txt
-│
-├── n8n/                      # Workflow Assets
-│   └── workflows/            # Exported .json n8n workflows
-│
-├── .gitignore
-├── docker-compose.yml        # (Optional) Spin up frontend, backend, and n8n locally
-└── README.md
+- Webapp 
+
+## Back-end
+- n8n Cloud hosted
+
+## Database
+Firestore Google
+
+---
+## Dataset Google Drive file structure
+```
+/bundle
+├─ /attachments - ( and SL information, may be in .txt .xlxs.pdf .docx)
+└─ /inbox - (email in .json format)
+```
+---
+## Database Fields layout:
+
+|Email No.| Shipper | Consignee| Notify Party| Port of Loading| Port of Discharge| Container Count| Gross Weight (KG)|
+|---|---|---|---|---|---|---|---|
+
+---
+- Might consider logging every email into database from classification in dashboard
+- Change all attachment and email into PDF for easy viewing
+
+1. Change Google sheet into Supabase
+2. Backend to fetch from Supabase and compare
+    - Discrepency: Flag field proem - Toggle Human Review Status
+    Else: Toggle Cleared Status
+3. Frontend ( Dashboard Saas Style )
+    - Human Review Section
+	  - Allow full manual input to change field and save to database
+	- Email + Attachment Viewing - in PDF standardized form
+	
+---
+## Tech stack:
+| Layer                 | Technology             | Responsibility                   |
+| --------------------- | ---------------------- | -------------------------------- |
+| Frontend              | [TBC - lightweight]    | SaaS dashboard                   |
+| Styling               | [TBC]                  | UI                               |
+| Workflow and Backend  | n8n Cloud              | Ingestion/orchestration          |
+| AI                    | [Cloud LLM TBC]        | Classification + extraction      |
+| Database              | Firebase Google        | Source of truth                  |
+| File storage          | Google Drive           | Dataset/source files             |
+| Comparison            | Python in n8n cloud    | Deterministic 7-field comparison |
+
