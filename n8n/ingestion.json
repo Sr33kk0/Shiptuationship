@@ -1,0 +1,1645 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "inputText": "=Subject: {{ $json.data.subject }}\nBody: {{ $json.data.body }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "Document-Comparison Request",
+              "description": "The email contains request for verification, Checking, finding discrepancies between Bill of Lading (BL) and Shipping Instruction (SI), and also contain attachments of BL and SI."
+            },
+            {
+              "category": "New SI Request",
+              "description": "The email mentions request or help finding Bill of Lading (BL) and Shipping Instruction (SI) for a specific Shipment, does not have attachments"
+            },
+            {
+              "category": "Invoice Queries"
+            },
+            {
+              "category": "General Messages"
+            }
+          ]
+        },
+        "options": {
+          "fallback": "other"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        -240
+      ],
+      "id": "2f765ac1-362c-4400-ba98-78806a2e8388",
+      "name": "Main Classifier",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 1,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "https://drive.google.com/drive/u/0/folders/1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6",
+          "mode": "url"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -176
+      ],
+      "id": "ed22c571-3860-4375-b3c7-d382332906fa",
+      "name": "Google Drive Trigger",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rzkWb8Dad9B4NaAS",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert logistics data extractor. Your task is to extract seven specific shipment fields from the provided document text into a strict JSON format. \n\nEXTRACTION RULES:\n1. shipper (Aliases: SHPR, EXPORTER, EXP, PRINCIPAL, SELLER): Extract ONLY the legal company name. You must STOP extracting before the street address begins. Exclude phone numbers and tax IDs.\n2. consignee (Aliases: CNEE, CONS): Extract ONLY the legal company name. You must STOP extracting before the street address begins. Exclude phone numbers and tax IDs. If the text indicates \"To Order\", output exactly \"To Order\".\n3. notify_party (Aliases: NTFY, NOTIFY, NOTIFY 1): Extract ONLY the legal company name. You must STOP extracting before the street address begins.\n4. port_of_loading (Aliases: POL, PLOA, LOAD PORT): Extract the full port name. Keep any included country names or port codes.\n5. port_of_discharge (Aliases: POD, PDIS, DISCH PORT, PORT OF DESTINATION): Extract the full discharge port name. Keep any included country names or port codes.\n6. container_count (Aliases: CONT COUNT, NO. OF CONTAINERS, EQUIP, QTY): Output a strict integer representing the total number of containers. You must calculate the sum if multiple types are listed (e.g., \"1 x 40'HC\" outputs 1. \"2 x 20', 1 x 40'\" outputs 3).\n7. gross_weight_kg (Aliases: G.W., GROSS WT, WGT, TOTAL WGT): Output a numeric float for the total weight in kilograms. Strip all commas and text characters (e.g., \"21,577 KG\" outputs 21577.0). If the source uses LBS, multiply the number by 0.453592. If MT, multiply by 1000.\n\nOUTPUT INSTRUCTIONS:\n- Output ONLY valid, raw JSON. \n- Do not wrap the response in markdown code blocks (no ```json). \n- Do not add conversational text or explanations. \n- If a field is completely missing from the text, use literal null (not the string \"null\").\n\nSCHEMA:\n{\n  \"shipper\": string or null,\n  \"consignee\": string or null,\n  \"notify_party\": string or null,\n  \"port_of_loading\": string or null,\n  \"port_of_discharge\": string or null,\n  \"container_count\": integer or null,\n  \"gross_weight_kg\": float or null\n}\n\nDOCUMENT TEXT:\n{{ $json.document_text }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2384,
+        -192
+      ],
+      "id": "f002be04-c2f3-4362-87f3-89e301ae16a8",
+      "name": "Field Normalise"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        -176
+      ],
+      "id": "9b40bb08-ffb6-4b69-867e-4f435857047d",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rzkWb8Dad9B4NaAS",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen3.5:9b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmOllama",
+      "typeVersion": 1,
+      "position": [
+        400,
+        80
+      ],
+      "id": "c819049e-02b9-4bbf-b41d-dc9f5a07e962",
+      "name": "Ollama Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "ffM4ux7uBK90gRy2",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen3.5:9b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmOllama",
+      "typeVersion": 1,
+      "position": [
+        2384,
+        32
+      ],
+      "id": "707c1bd3-3880-4f82-8a2a-07016a50fdff",
+      "name": "Ollama Model1",
+      "credentials": {
+        "ollamaApi": {
+          "id": "ffM4ux7uBK90gRy2",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        -176
+      ],
+      "id": "f93ba896-1750-4e47-9555-bad98d5eca80",
+      "name": "Parse Attachment1"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data.attachments",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        784,
+        -256
+      ],
+      "id": "7ecdd6f9-4c34-4e08-ac17-301e934f6596",
+      "name": "Split Out1"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1264,
+        -256
+      ],
+      "id": "58c11ff3-e2b2-4071-b8f5-c25fa7dd7043",
+      "name": "Download File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rzkWb8Dad9B4NaAS",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "queryString": "={{ $json[\"data.attachments\"].split('/').pop() }}",
+        "limit": 1,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "168hy9WprM5UTlvk1lTDyM-CiH5ARFaIQ",
+            "mode": "list",
+            "cachedResultName": "attachments",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/168hy9WprM5UTlvk1lTDyM-CiH5ARFaIQ"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1024,
+        -256
+      ],
+      "id": "a9b91836-80fe-430d-bb18-fd4121a7de72",
+      "name": "Search files and folders2",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rzkWb8Dad9B4NaAS",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        -304
+      ],
+      "id": "ba40583b-6311-4320-9841-ab5c94e024eb",
+      "name": "Parse TXT"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.readPDF",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        -144
+      ],
+      "id": "714370ed-88e3-4004-bb50-1c67fe5fa5f6",
+      "name": "Read PDF"
+    },
+    {
+      "parameters": {
+        "operation": "read"
+      },
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "540b24d0-50f9-46dc-b4ce-db319fbad5bb",
+      "name": "Read Excel"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.name }}",
+                    "rightValue": ".txt",
+                    "operator": {
+                      "type": "string",
+                      "operation": "endsWith"
+                    },
+                    "id": "txt-condition"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.name }}",
+                    "rightValue": ".pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "endsWith"
+                    },
+                    "id": "pdf-condition"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.name }}",
+                    "rightValue": ".xlsx",
+                    "operator": {
+                      "type": "string",
+                      "operation": "endsWith"
+                    },
+                    "id": "xlsx-condition"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "bb2dd83c-ac74-41a7-862a-0ae3254d1ce3",
+                    "leftValue": "={{ $json.name }}",
+                    "rightValue": ".docx",
+                    "operator": {
+                      "type": "string",
+                      "operation": "endsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1472,
+        -288
+      ],
+      "id": "f981285f-d9ac-422f-903d-4d6f6349ca67",
+      "name": "File Extension Categorization"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 1. Standardize the text output from the different parsers\nlet text = \"\";\nif ($json.data) text = $json.data;\nelse if ($json.text) text = $json.text;\nelse text = JSON.stringify($json);\n\n// 2. Fetch the filename from the Search node\nlet filename = $('Search files and folders2').item.json.name || \"\";\n\n// 3. Determine if this is the SI or BL file based on the filename\nlet docType = filename.includes(\"SI\") ? \"SI\" : \"BL\";\n\n// 4. Extract the email_id directly from the filename (e.g., email_004_SI.txt -> email_004)\nlet emailId = filename.split(\"_SI\")[0].split(\"_BL\")[0];\n\nreturn { \n  email_id: emailId,\n  document_type: docType,\n  filename: filename,\n  document_text: text\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        -304
+      ],
+      "id": "93281508-2a6a-43f6-8c4c-3651641e40b5",
+      "name": "Normalize & Tag Data"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 1. Safely parse the JSON string from the LLM's 'text' output\nlet extractedData = {};\ntry {\n  extractedData = JSON.parse($json.text);\n} catch (error) {\n  // Fallback just in case the parser already converted it to an object\n  extractedData = $json; \n}\n\n// 2. Re-attach the email_id and doc_type using the correct node name\nreturn {\n  email_id: $('Normalize & Tag Data').item.json.email_id,\n  document_type: $('Normalize & Tag Data').item.json.document_type,\n  extracted_fields: extractedData\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        -192
+      ],
+      "id": "e76acfc6-39c2-440c-b1f0-fce260b6ac62",
+      "name": "Re-attach Metadata"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1dWTV0Bm1DVVvsyDmLXwa5QM80jsqdanMbCKo-GSWblk",
+          "mode": "list",
+          "cachedResultName": "HokkienMee",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dWTV0Bm1DVVvsyDmLXwa5QM80jsqdanMbCKo-GSWblk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dWTV0Bm1DVVvsyDmLXwa5QM80jsqdanMbCKo-GSWblk/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email No.": "={{ $json[\"Email No.\"] }}",
+            "BL Shipper ": "={{ $json[\"BL Shipper \"] }}",
+            "BL Consignee": "={{ $json[\"BL Consignee\"] }}",
+            "BL Notify Party": "={{ $json[\"BL Notify Party\"] }}",
+            "BL Port of Loading": "={{ $json[\"BL Port of Loading\"] }}",
+            "Bl Port of Discharge": "={{ $json[\"Bl Port of Discharge\"] }}",
+            "BL Container Count": "={{ $json[\"BL Container Count\"] }}",
+            "BL Gross Weight (KG)": "={{ $json[\"BL Gross Weight (KG)\"] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Email No.",
+              "displayName": "Email No.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BL Shipper ",
+              "displayName": "BL Shipper ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BL Consignee",
+              "displayName": "BL Consignee",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BL Notify Party",
+              "displayName": "BL Notify Party",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BL Port of Loading",
+              "displayName": "BL Port of Loading",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Bl Port of Discharge",
+              "displayName": "Bl Port of Discharge",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BL Container Count",
+              "displayName": "BL Container Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "BL Gross Weight (KG)",
+              "displayName": "BL Gross Weight (KG)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3600,
+        -288
+      ],
+      "id": "730cc501-b42c-4096-846c-5bb3c5c81c10",
+      "name": "Append BL to Sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QsBLTLTMMISkXxUL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1dWTV0Bm1DVVvsyDmLXwa5QM80jsqdanMbCKo-GSWblk",
+          "mode": "list",
+          "cachedResultName": "HokkienMee",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dWTV0Bm1DVVvsyDmLXwa5QM80jsqdanMbCKo-GSWblk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1418900149,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1dWTV0Bm1DVVvsyDmLXwa5QM80jsqdanMbCKo-GSWblk/edit#gid=1418900149"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email No.": "={{ $json[\"Email No.\"] }}",
+            "SI Shipper ": "={{ $json[\"SI Shipper \"] }}",
+            "SI Consignee": "={{ $json[\"SI Consignee\"] }}",
+            "SI Notify Party": "={{ $json[\"SI Notify Party\"] }}",
+            "SI Port of Loading": "={{ $json[\"SI Port of Loading\"] }}",
+            "SI Port of Discharge": "={{ $json[\"SI Port of Discharge\"] }}",
+            "SI Container Count": "={{ $json[\"SI Container Count\"] }}",
+            "SI Gross Weight (KG)": "={{ $json[\"SI Gross Weight (KG)\"] }}"
+          },
+          "matchingColumns": [
+            "Email No."
+          ],
+          "schema": [
+            {
+              "id": "Email No.",
+              "displayName": "Email No.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "SI Shipper ",
+              "displayName": "SI Shipper ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SI Consignee",
+              "displayName": "SI Consignee",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SI Notify Party",
+              "displayName": "SI Notify Party",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SI Port of Loading",
+              "displayName": "SI Port of Loading",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SI Port of Discharge",
+              "displayName": "SI Port of Discharge",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SI Container Count",
+              "displayName": "SI Container Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "SI Gross Weight (KG)",
+              "displayName": "SI Gross Weight (KG)",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3600,
+        -64
+      ],
+      "id": "e3b92a08-564d-44db-9661-7361d17bbe1d",
+      "name": "Append SI to Sheet2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QsBLTLTMMISkXxUL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let result = [];\n\nfor (let item of $input.all()) {\n  let data = item.json;\n  let emailId = data.email_id;\n  let fields = data.extracted_fields || {};\n  \n  if (data.document_type === \"BL\") {\n    result.push({\n      json: {\n        \"_routing_tag\": \"BL\",\n        \"Email No.\": emailId,\n        \"BL Shipper \": fields.shipper || \"\",\n        \"BL Consignee\": fields.consignee || \"\",\n        \"BL Notify Party\": fields.notify_party || \"\",\n        \"BL Port of Loading\": fields.port_of_loading || \"\",\n        \"Bl Port of Discharge\": fields.port_of_discharge || \"\",\n        \"BL Container Count\": fields.container_count || \"\",\n        \"BL Gross Weight (KG)\": fields.gross_weight_kg || \"\"\n      }\n    });\n  } else if (data.document_type === \"SI\") {\n    result.push({\n      json: {\n        \"_routing_tag\": \"SI\",\n        \"Email No.\": emailId,\n        \"SI Shipper \": fields.shipper || \"\",\n        \"SI Consignee\": fields.consignee || \"\",\n        \"SI Notify Party\": fields.notify_party || \"\",\n        \"SI Port of Loading\": fields.port_of_loading || \"\",\n        \"SI Port of Discharge\": fields.port_of_discharge || \"\",\n        \"SI Container Count\": fields.container_count || \"\",\n        \"SI Gross Weight (KG)\": fields.gross_weight_kg || \"\"\n      }\n    });\n  }\n}\n\nreturn result;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        -176
+      ],
+      "id": "458dd7fe-8796-4389-9705-0d77a5678d09",
+      "name": "Prepare for Sheets (Separate)"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json[\"_routing_tag\"] }}",
+                    "rightValue": "BL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "route-bl"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json[\"_routing_tag\"] }}",
+                    "rightValue": "SI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "route-si"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        3312,
+        -144
+      ],
+      "id": "991b2aab-ff36-43a1-a1f0-3375f8e8bc8c",
+      "name": "Route by Document Type1"
+    }
+  ],
+  "connections": {
+    "Main Classifier": {
+      "main": [
+        [
+          {
+            "node": "Split Out1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Field Normalise": {
+      "main": [
+        [
+          {
+            "node": "Re-attach Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Parse Attachment1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Main Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Field Normalise",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Attachment1": {
+      "main": [
+        [
+          {
+            "node": "Main Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out1": {
+      "main": [
+        [
+          {
+            "node": "Search files and folders2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "File Extension Categorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search files and folders2": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse TXT": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Tag Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read PDF": {
+      "main": [
+        []
+      ]
+    },
+    "Read Excel": {
+      "main": [
+        []
+      ]
+    },
+    "File Extension Categorization": {
+      "main": [
+        [
+          {
+            "node": "Parse TXT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Excel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Normalize & Tag Data": {
+      "main": [
+        [
+          {
+            "node": "Field Normalise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-attach Metadata": {
+      "main": [
+        [
+          {
+            "node": "Prepare for Sheets (Separate)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Sheets (Separate)": {
+      "main": [
+        [
+          {
+            "node": "Route by Document Type1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Document Type1": {
+      "main": [
+        [
+          {
+            "node": "Append BL to Sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append SI to Sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Google Drive Trigger": [
+      {
+        "kind": "drive#file",
+        "fileExtension": "json",
+        "copyRequiresWriterPermission": false,
+        "md5Checksum": "9d6a9ca22824e4b328f0c9239ad2209d",
+        "writersCanShare": true,
+        "viewedByMe": true,
+        "mimeType": "application/json",
+        "parents": [
+          "1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6"
+        ],
+        "iconLink": "https://drive-thirdparty.googleusercontent.com/16/type/application/json",
+        "shared": false,
+        "lastModifyingUser": {
+          "displayName": "Shou Yee Ho",
+          "kind": "drive#user",
+          "me": true,
+          "permissionId": "14170133908217415781",
+          "emailAddress": "syho81336.ho@gmail.com",
+          "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+        },
+        "owners": [
+          {
+            "displayName": "Shou Yee Ho",
+            "kind": "drive#user",
+            "me": true,
+            "permissionId": "14170133908217415781",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+          }
+        ],
+        "headRevisionId": "0B6XFxJ97E9aiZEVlZWhWbVU0WklsTy8xQ2E0a29pS0pSczJjPQ",
+        "webViewLink": "https://drive.google.com/file/d/1Z0YHxFSJ-UE1itH5JgoDEpAdn3KZDKac/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1Z0YHxFSJ-UE1itH5JgoDEpAdn3KZDKac&export=download",
+        "size": "659",
+        "viewersCanCopyContent": true,
+        "permissions": [
+          {
+            "id": "14170133908217415781",
+            "displayName": "Shou Yee Ho",
+            "type": "user",
+            "kind": "drive#permission",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "role": "owner",
+            "deleted": false,
+            "pendingOwner": false
+          }
+        ],
+        "hasThumbnail": false,
+        "spaces": [
+          "drive"
+        ],
+        "id": "1Z0YHxFSJ-UE1itH5JgoDEpAdn3KZDKac",
+        "name": "email_001.json",
+        "starred": false,
+        "trashed": false,
+        "explicitlyTrashed": false,
+        "createdTime": "2026-09-18T19:11:34.805Z",
+        "modifiedTime": "2026-09-18T14:34:31.000Z",
+        "modifiedByMeTime": "2026-09-18T14:34:31.000Z",
+        "viewedByMeTime": "2026-09-18T19:11:34.805Z",
+        "quotaBytesUsed": "659",
+        "version": "2",
+        "originalFilename": "email_001.json",
+        "ownedByMe": true,
+        "fullFileExtension": "json",
+        "isAppAuthorized": false,
+        "capabilities": {
+          "canChangeViewersCanCopyContent": true,
+          "canEdit": true,
+          "canCopy": true,
+          "canComment": true,
+          "canAddChildren": false,
+          "canDelete": true,
+          "canDownload": true,
+          "canListChildren": false,
+          "canRemoveChildren": false,
+          "canRename": true,
+          "canTrash": true,
+          "canReadRevisions": true,
+          "canChangeCopyRequiresWriterPermission": true,
+          "canMoveItemIntoTeamDrive": true,
+          "canUntrash": true,
+          "canModifyContent": true,
+          "canMoveItemOutOfDrive": true,
+          "canAddMyDriveParent": false,
+          "canRemoveMyDriveParent": true,
+          "canMoveItemWithinDrive": true,
+          "canShare": true,
+          "canMoveChildrenWithinDrive": false,
+          "canModifyContentRestriction": true,
+          "canChangeSecurityUpdateEnabled": false,
+          "canAcceptOwnership": false,
+          "canReadLabels": false,
+          "canModifyLabels": false,
+          "canModifyEditorContentRestriction": true,
+          "canModifyOwnerContentRestriction": true,
+          "canRemoveContentRestriction": false,
+          "canDisableInheritedPermissions": false,
+          "canEnableInheritedPermissions": true,
+          "canChangeItemDownloadRestriction": true,
+          "canStartApproval": false,
+          "canAccessViaGenAi": true
+        },
+        "thumbnailVersion": "0",
+        "modifiedByMe": true,
+        "permissionIds": [
+          "14170133908217415781"
+        ],
+        "linkShareMetadata": {
+          "securityUpdateEligible": false,
+          "securityUpdateEnabled": true
+        },
+        "sha1Checksum": "c907ed25283917871a40f0e95b4e95e9a76a1ead",
+        "sha256Checksum": "c38e96091695314025dab5b647e46ae301a1c917d0d42ee13be5c1b10cb91fd0",
+        "inheritedPermissionsDisabled": false,
+        "downloadRestrictions": {
+          "itemDownloadRestriction": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          },
+          "effectiveDownloadRestrictionWithContext": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          }
+        },
+        "clientEncryptionDetails": {
+          "decryptionMetadata": {
+            "wrappedKey": "",
+            "kaclsId": "0",
+            "aes256GcmChunkSize": "unset",
+            "keyFormat": "unsetKeyFormat",
+            "encryptionResourceKeyHash": ""
+          }
+        }
+      },
+      {
+        "kind": "drive#file",
+        "fileExtension": "json",
+        "copyRequiresWriterPermission": false,
+        "md5Checksum": "4eafce06735142d3626440e9d54d1206",
+        "writersCanShare": true,
+        "viewedByMe": true,
+        "mimeType": "application/json",
+        "parents": [
+          "1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6"
+        ],
+        "iconLink": "https://drive-thirdparty.googleusercontent.com/16/type/application/json",
+        "shared": false,
+        "lastModifyingUser": {
+          "displayName": "Shou Yee Ho",
+          "kind": "drive#user",
+          "me": true,
+          "permissionId": "14170133908217415781",
+          "emailAddress": "syho81336.ho@gmail.com",
+          "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+        },
+        "owners": [
+          {
+            "displayName": "Shou Yee Ho",
+            "kind": "drive#user",
+            "me": true,
+            "permissionId": "14170133908217415781",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+          }
+        ],
+        "headRevisionId": "0B6XFxJ97E9aid01TalFDc3pZTkRReXp2YXZ5QlZzU0RBdVVZPQ",
+        "webViewLink": "https://drive.google.com/file/d/1xeJluaGzYig5oph0YARheRWC6IfBm1H_/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1xeJluaGzYig5oph0YARheRWC6IfBm1H_&export=download",
+        "size": "630",
+        "viewersCanCopyContent": true,
+        "permissions": [
+          {
+            "id": "14170133908217415781",
+            "displayName": "Shou Yee Ho",
+            "type": "user",
+            "kind": "drive#permission",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "role": "owner",
+            "deleted": false,
+            "pendingOwner": false
+          }
+        ],
+        "hasThumbnail": false,
+        "spaces": [
+          "drive"
+        ],
+        "id": "1xeJluaGzYig5oph0YARheRWC6IfBm1H_",
+        "name": "email_004.json",
+        "starred": false,
+        "trashed": false,
+        "explicitlyTrashed": false,
+        "createdTime": "2026-09-18T19:11:34.799Z",
+        "modifiedTime": "2026-09-18T14:34:30.000Z",
+        "modifiedByMeTime": "2026-09-18T14:34:30.000Z",
+        "viewedByMeTime": "2026-09-18T19:11:34.799Z",
+        "quotaBytesUsed": "630",
+        "version": "2",
+        "originalFilename": "email_004.json",
+        "ownedByMe": true,
+        "fullFileExtension": "json",
+        "isAppAuthorized": false,
+        "capabilities": {
+          "canChangeViewersCanCopyContent": true,
+          "canEdit": true,
+          "canCopy": true,
+          "canComment": true,
+          "canAddChildren": false,
+          "canDelete": true,
+          "canDownload": true,
+          "canListChildren": false,
+          "canRemoveChildren": false,
+          "canRename": true,
+          "canTrash": true,
+          "canReadRevisions": true,
+          "canChangeCopyRequiresWriterPermission": true,
+          "canMoveItemIntoTeamDrive": true,
+          "canUntrash": true,
+          "canModifyContent": true,
+          "canMoveItemOutOfDrive": true,
+          "canAddMyDriveParent": false,
+          "canRemoveMyDriveParent": true,
+          "canMoveItemWithinDrive": true,
+          "canShare": true,
+          "canMoveChildrenWithinDrive": false,
+          "canModifyContentRestriction": true,
+          "canChangeSecurityUpdateEnabled": false,
+          "canAcceptOwnership": false,
+          "canReadLabels": false,
+          "canModifyLabels": false,
+          "canModifyEditorContentRestriction": true,
+          "canModifyOwnerContentRestriction": true,
+          "canRemoveContentRestriction": false,
+          "canDisableInheritedPermissions": false,
+          "canEnableInheritedPermissions": true,
+          "canChangeItemDownloadRestriction": true,
+          "canStartApproval": false,
+          "canAccessViaGenAi": true
+        },
+        "thumbnailVersion": "0",
+        "modifiedByMe": true,
+        "permissionIds": [
+          "14170133908217415781"
+        ],
+        "linkShareMetadata": {
+          "securityUpdateEligible": false,
+          "securityUpdateEnabled": true
+        },
+        "sha1Checksum": "6276e15676744016e30e353f8a4758a426505a9f",
+        "sha256Checksum": "d96cc8ac77b21818a24704eab6368071438f95b1b26ae4e263a1902787ce8a9b",
+        "inheritedPermissionsDisabled": false,
+        "downloadRestrictions": {
+          "itemDownloadRestriction": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          },
+          "effectiveDownloadRestrictionWithContext": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          }
+        },
+        "clientEncryptionDetails": {
+          "decryptionMetadata": {
+            "wrappedKey": "",
+            "kaclsId": "0",
+            "aes256GcmChunkSize": "unset",
+            "keyFormat": "unsetKeyFormat",
+            "encryptionResourceKeyHash": ""
+          }
+        }
+      },
+      {
+        "kind": "drive#file",
+        "fileExtension": "json",
+        "copyRequiresWriterPermission": false,
+        "md5Checksum": "b442e953fb1955c758f295f78e68d135",
+        "writersCanShare": true,
+        "viewedByMe": true,
+        "mimeType": "application/json",
+        "parents": [
+          "1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6"
+        ],
+        "iconLink": "https://drive-thirdparty.googleusercontent.com/16/type/application/json",
+        "shared": false,
+        "lastModifyingUser": {
+          "displayName": "Shou Yee Ho",
+          "kind": "drive#user",
+          "me": true,
+          "permissionId": "14170133908217415781",
+          "emailAddress": "syho81336.ho@gmail.com",
+          "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+        },
+        "owners": [
+          {
+            "displayName": "Shou Yee Ho",
+            "kind": "drive#user",
+            "me": true,
+            "permissionId": "14170133908217415781",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+          }
+        ],
+        "headRevisionId": "0B6XFxJ97E9aiR0JwMXoyTTVwUWliRTRNZVRyM3ROTDREdUVVPQ",
+        "webViewLink": "https://drive.google.com/file/d/1aKKWoYPIRrczx1oYSeGLwdEMmonTh6Zj/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1aKKWoYPIRrczx1oYSeGLwdEMmonTh6Zj&export=download",
+        "size": "921",
+        "viewersCanCopyContent": true,
+        "permissions": [
+          {
+            "id": "14170133908217415781",
+            "displayName": "Shou Yee Ho",
+            "type": "user",
+            "kind": "drive#permission",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "role": "owner",
+            "deleted": false,
+            "pendingOwner": false
+          }
+        ],
+        "hasThumbnail": false,
+        "spaces": [
+          "drive"
+        ],
+        "id": "1aKKWoYPIRrczx1oYSeGLwdEMmonTh6Zj",
+        "name": "email_005.json",
+        "starred": false,
+        "trashed": false,
+        "explicitlyTrashed": false,
+        "createdTime": "2026-09-18T19:11:34.715Z",
+        "modifiedTime": "2026-09-18T14:34:30.000Z",
+        "modifiedByMeTime": "2026-09-18T14:34:30.000Z",
+        "viewedByMeTime": "2026-09-18T19:11:34.715Z",
+        "quotaBytesUsed": "921",
+        "version": "2",
+        "originalFilename": "email_005.json",
+        "ownedByMe": true,
+        "fullFileExtension": "json",
+        "isAppAuthorized": false,
+        "capabilities": {
+          "canChangeViewersCanCopyContent": true,
+          "canEdit": true,
+          "canCopy": true,
+          "canComment": true,
+          "canAddChildren": false,
+          "canDelete": true,
+          "canDownload": true,
+          "canListChildren": false,
+          "canRemoveChildren": false,
+          "canRename": true,
+          "canTrash": true,
+          "canReadRevisions": true,
+          "canChangeCopyRequiresWriterPermission": true,
+          "canMoveItemIntoTeamDrive": true,
+          "canUntrash": true,
+          "canModifyContent": true,
+          "canMoveItemOutOfDrive": true,
+          "canAddMyDriveParent": false,
+          "canRemoveMyDriveParent": true,
+          "canMoveItemWithinDrive": true,
+          "canShare": true,
+          "canMoveChildrenWithinDrive": false,
+          "canModifyContentRestriction": true,
+          "canChangeSecurityUpdateEnabled": false,
+          "canAcceptOwnership": false,
+          "canReadLabels": false,
+          "canModifyLabels": false,
+          "canModifyEditorContentRestriction": true,
+          "canModifyOwnerContentRestriction": true,
+          "canRemoveContentRestriction": false,
+          "canDisableInheritedPermissions": false,
+          "canEnableInheritedPermissions": true,
+          "canChangeItemDownloadRestriction": true,
+          "canStartApproval": false,
+          "canAccessViaGenAi": true
+        },
+        "thumbnailVersion": "0",
+        "modifiedByMe": true,
+        "permissionIds": [
+          "14170133908217415781"
+        ],
+        "linkShareMetadata": {
+          "securityUpdateEligible": false,
+          "securityUpdateEnabled": true
+        },
+        "sha1Checksum": "8fc74d6e698bdb5ed82b6893de23a16ef8168f8b",
+        "sha256Checksum": "708877c72c754dc85d7afff284a2cca677073bb2bad20ea186b2ea351cb41763",
+        "inheritedPermissionsDisabled": false,
+        "downloadRestrictions": {
+          "itemDownloadRestriction": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          },
+          "effectiveDownloadRestrictionWithContext": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          }
+        },
+        "clientEncryptionDetails": {
+          "decryptionMetadata": {
+            "wrappedKey": "",
+            "kaclsId": "0",
+            "aes256GcmChunkSize": "unset",
+            "keyFormat": "unsetKeyFormat",
+            "encryptionResourceKeyHash": ""
+          }
+        }
+      },
+      {
+        "kind": "drive#file",
+        "fileExtension": "json",
+        "copyRequiresWriterPermission": false,
+        "md5Checksum": "e915ebab3ec44b5907481656fcd13d40",
+        "writersCanShare": true,
+        "viewedByMe": true,
+        "mimeType": "application/json",
+        "parents": [
+          "1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6"
+        ],
+        "iconLink": "https://drive-thirdparty.googleusercontent.com/16/type/application/json",
+        "shared": false,
+        "lastModifyingUser": {
+          "displayName": "Shou Yee Ho",
+          "kind": "drive#user",
+          "me": true,
+          "permissionId": "14170133908217415781",
+          "emailAddress": "syho81336.ho@gmail.com",
+          "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+        },
+        "owners": [
+          {
+            "displayName": "Shou Yee Ho",
+            "kind": "drive#user",
+            "me": true,
+            "permissionId": "14170133908217415781",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+          }
+        ],
+        "headRevisionId": "0B6XFxJ97E9aibURFdzdHMnpCajVoUHlXSGY1TnIvYjlUU2hBPQ",
+        "webViewLink": "https://drive.google.com/file/d/1iEYvWgpI2s22WvUlXLGDFd7_dw5G3Avk/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1iEYvWgpI2s22WvUlXLGDFd7_dw5G3Avk&export=download",
+        "size": "551",
+        "viewersCanCopyContent": true,
+        "permissions": [
+          {
+            "id": "14170133908217415781",
+            "displayName": "Shou Yee Ho",
+            "type": "user",
+            "kind": "drive#permission",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "role": "owner",
+            "deleted": false,
+            "pendingOwner": false
+          }
+        ],
+        "hasThumbnail": false,
+        "spaces": [
+          "drive"
+        ],
+        "id": "1iEYvWgpI2s22WvUlXLGDFd7_dw5G3Avk",
+        "name": "email_003.json",
+        "starred": false,
+        "trashed": false,
+        "explicitlyTrashed": false,
+        "createdTime": "2026-09-18T19:11:34.694Z",
+        "modifiedTime": "2026-09-18T14:34:30.000Z",
+        "modifiedByMeTime": "2026-09-18T14:34:30.000Z",
+        "viewedByMeTime": "2026-09-18T19:11:34.694Z",
+        "quotaBytesUsed": "551",
+        "version": "2",
+        "originalFilename": "email_003.json",
+        "ownedByMe": true,
+        "fullFileExtension": "json",
+        "isAppAuthorized": false,
+        "capabilities": {
+          "canChangeViewersCanCopyContent": true,
+          "canEdit": true,
+          "canCopy": true,
+          "canComment": true,
+          "canAddChildren": false,
+          "canDelete": true,
+          "canDownload": true,
+          "canListChildren": false,
+          "canRemoveChildren": false,
+          "canRename": true,
+          "canTrash": true,
+          "canReadRevisions": true,
+          "canChangeCopyRequiresWriterPermission": true,
+          "canMoveItemIntoTeamDrive": true,
+          "canUntrash": true,
+          "canModifyContent": true,
+          "canMoveItemOutOfDrive": true,
+          "canAddMyDriveParent": false,
+          "canRemoveMyDriveParent": true,
+          "canMoveItemWithinDrive": true,
+          "canShare": true,
+          "canMoveChildrenWithinDrive": false,
+          "canModifyContentRestriction": true,
+          "canChangeSecurityUpdateEnabled": false,
+          "canAcceptOwnership": false,
+          "canReadLabels": false,
+          "canModifyLabels": false,
+          "canModifyEditorContentRestriction": true,
+          "canModifyOwnerContentRestriction": true,
+          "canRemoveContentRestriction": false,
+          "canDisableInheritedPermissions": false,
+          "canEnableInheritedPermissions": true,
+          "canChangeItemDownloadRestriction": true,
+          "canStartApproval": false,
+          "canAccessViaGenAi": true
+        },
+        "thumbnailVersion": "0",
+        "modifiedByMe": true,
+        "permissionIds": [
+          "14170133908217415781"
+        ],
+        "linkShareMetadata": {
+          "securityUpdateEligible": false,
+          "securityUpdateEnabled": true
+        },
+        "sha1Checksum": "97e837cc8cbb692436c18d5aae85209d08d109c1",
+        "sha256Checksum": "8a934a5d9e74e3e29b0703bd77da3b0d964064094de5037b33824c95db15c293",
+        "inheritedPermissionsDisabled": false,
+        "downloadRestrictions": {
+          "itemDownloadRestriction": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          },
+          "effectiveDownloadRestrictionWithContext": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          }
+        },
+        "clientEncryptionDetails": {
+          "decryptionMetadata": {
+            "wrappedKey": "",
+            "kaclsId": "0",
+            "aes256GcmChunkSize": "unset",
+            "keyFormat": "unsetKeyFormat",
+            "encryptionResourceKeyHash": ""
+          }
+        }
+      },
+      {
+        "kind": "drive#file",
+        "fileExtension": "json",
+        "copyRequiresWriterPermission": false,
+        "md5Checksum": "6915c07e500500c9aebcd7f62ecef9f8",
+        "writersCanShare": true,
+        "viewedByMe": true,
+        "mimeType": "application/json",
+        "parents": [
+          "1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6"
+        ],
+        "iconLink": "https://drive-thirdparty.googleusercontent.com/16/type/application/json",
+        "shared": false,
+        "lastModifyingUser": {
+          "displayName": "Shou Yee Ho",
+          "kind": "drive#user",
+          "me": true,
+          "permissionId": "14170133908217415781",
+          "emailAddress": "syho81336.ho@gmail.com",
+          "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+        },
+        "owners": [
+          {
+            "displayName": "Shou Yee Ho",
+            "kind": "drive#user",
+            "me": true,
+            "permissionId": "14170133908217415781",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64"
+          }
+        ],
+        "headRevisionId": "0B6XFxJ97E9aiL1YyQ0wxaWlkcnpPUVYzNkcvZFpTVDV5WTlFPQ",
+        "webViewLink": "https://drive.google.com/file/d/1gXz4oAsi9QzwVzmgbIFCGu3rPjhIHoU1/view?usp=drivesdk",
+        "webContentLink": "https://drive.google.com/uc?id=1gXz4oAsi9QzwVzmgbIFCGu3rPjhIHoU1&export=download",
+        "size": "773",
+        "viewersCanCopyContent": true,
+        "permissions": [
+          {
+            "id": "14170133908217415781",
+            "displayName": "Shou Yee Ho",
+            "type": "user",
+            "kind": "drive#permission",
+            "photoLink": "https://lh3.googleusercontent.com/a/ACg8ocKZf1V_SJlJUhf0rY5fxQLKHpkWlke1BGnTkCuwLFSKLtmmnw7K=s64",
+            "emailAddress": "syho81336.ho@gmail.com",
+            "role": "owner",
+            "deleted": false,
+            "pendingOwner": false
+          }
+        ],
+        "hasThumbnail": false,
+        "spaces": [
+          "drive"
+        ],
+        "id": "1gXz4oAsi9QzwVzmgbIFCGu3rPjhIHoU1",
+        "name": "email_002.json",
+        "starred": false,
+        "trashed": false,
+        "explicitlyTrashed": false,
+        "createdTime": "2026-09-18T19:11:34.878Z",
+        "modifiedTime": "2026-09-18T14:34:29.000Z",
+        "modifiedByMeTime": "2026-09-18T14:34:29.000Z",
+        "viewedByMeTime": "2026-09-18T19:11:34.878Z",
+        "quotaBytesUsed": "773",
+        "version": "2",
+        "originalFilename": "email_002.json",
+        "ownedByMe": true,
+        "fullFileExtension": "json",
+        "isAppAuthorized": false,
+        "capabilities": {
+          "canChangeViewersCanCopyContent": true,
+          "canEdit": true,
+          "canCopy": true,
+          "canComment": true,
+          "canAddChildren": false,
+          "canDelete": true,
+          "canDownload": true,
+          "canListChildren": false,
+          "canRemoveChildren": false,
+          "canRename": true,
+          "canTrash": true,
+          "canReadRevisions": true,
+          "canChangeCopyRequiresWriterPermission": true,
+          "canMoveItemIntoTeamDrive": true,
+          "canUntrash": true,
+          "canModifyContent": true,
+          "canMoveItemOutOfDrive": true,
+          "canAddMyDriveParent": false,
+          "canRemoveMyDriveParent": true,
+          "canMoveItemWithinDrive": true,
+          "canShare": true,
+          "canMoveChildrenWithinDrive": false,
+          "canModifyContentRestriction": true,
+          "canChangeSecurityUpdateEnabled": false,
+          "canAcceptOwnership": false,
+          "canReadLabels": false,
+          "canModifyLabels": false,
+          "canModifyEditorContentRestriction": true,
+          "canModifyOwnerContentRestriction": true,
+          "canRemoveContentRestriction": false,
+          "canDisableInheritedPermissions": false,
+          "canEnableInheritedPermissions": true,
+          "canChangeItemDownloadRestriction": true,
+          "canStartApproval": false,
+          "canAccessViaGenAi": true
+        },
+        "thumbnailVersion": "0",
+        "modifiedByMe": true,
+        "permissionIds": [
+          "14170133908217415781"
+        ],
+        "linkShareMetadata": {
+          "securityUpdateEligible": false,
+          "securityUpdateEnabled": true
+        },
+        "sha1Checksum": "e62bb5b373595cc40423b49af9dfe5d6dfa211cd",
+        "sha256Checksum": "b176e88121cd2e9171d079fa2584ee65ef7e55a4299dd1d6650c3fda64fd73d5",
+        "inheritedPermissionsDisabled": false,
+        "downloadRestrictions": {
+          "itemDownloadRestriction": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          },
+          "effectiveDownloadRestrictionWithContext": {
+            "restrictedForReaders": false,
+            "restrictedForWriters": false
+          }
+        },
+        "clientEncryptionDetails": {
+          "decryptionMetadata": {
+            "wrappedKey": "",
+            "kaclsId": "0",
+            "aes256GcmChunkSize": "unset",
+            "keyFormat": "unsetKeyFormat",
+            "encryptionResourceKeyHash": ""
+          }
+        }
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a2ddff602bf01e2a1f2b339841076e1a72e65856e7a24e74b905efc2d2783fce"
+  }
+}
