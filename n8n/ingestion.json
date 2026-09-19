@@ -782,6 +782,126 @@
           "name": "Google Firebase Cloud Firestore account"
         }
       }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "export-summary",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        920
+      ],
+      "id": "a1b2c3d4-1111-4a2b-8c3d-4e5f60718293",
+      "name": "PDF Export Webhook",
+      "webhookId": "b2c3d4e5-2222-4b3c-9d4e-5f6071829304"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $json.body ?? {};\nconst email_id = body.email_id;\nif (typeof email_id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(email_id)) {\n  throw new Error('email_id is required and must contain only letters, numbers, underscores or hyphens.');\n}\nreturn { json: { email_id } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        920
+      ],
+      "id": "c3d4e5f6-3333-4c4d-ae5f-607182930415",
+      "name": "Validate Export Request",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents/emails/' + encodeURIComponent($json.email_id) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        920
+      ],
+      "id": "d4e5f607-4444-4d5e-bf60-718293041526",
+      "name": "Fetch Email For Export",
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function getValue(map, name) {\n  const f = map?.[name];\n  if (!f) return null;\n  if (f.stringValue !== undefined) return f.stringValue;\n  if (f.integerValue !== undefined) return Number(f.integerValue);\n  if (f.doubleValue !== undefined) return f.doubleValue;\n  if (f.booleanValue !== undefined) return f.booleanValue;\n  return null;\n}\n\nfunction esc(value) {\n  return String(value ?? '').replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\n}\n\nconst fields = $json.fields;\nif (!fields) throw new Error('Email not found in Firestore.');\n\nconst email_id = getValue(fields, 'email_id') ?? $('Validate Export Request').item.json.email_id;\nconst subject = getValue(fields, 'subject') ?? '(no subject)';\nconst from = getValue(fields, 'from') ?? '';\nconst to = getValue(fields, 'to') ?? '';\nconst receivedAt = getValue(fields, 'received_at') ?? '';\nconst classification = getValue(fields, 'classification') ?? '';\n\nconst blSource = fields.bl_source?.mapValue?.fields;\nconst siSource = fields.si_source?.mapValue?.fields;\nconst blFilename = getValue(blSource, 'filename');\nconst siFilename = getValue(siSource, 'filename');\n\nconst comparison = fields.comparison?.mapValue?.fields;\nconst compStatus = getValue(comparison, 'status') ?? 'not_run';\nconst compFieldsMap = comparison?.fields?.mapValue?.fields;\n\nconst blMap = fields.bl?.mapValue?.fields;\nconst siMap = fields.si?.mapValue?.fields;\n\nconst FIELD_LABELS = {\n  shipper: 'Shipper',\n  consignee: 'Consignee',\n  notify_party: 'Notify Party',\n  port_of_loading: 'Port of Loading',\n  port_of_discharge: 'Port of Discharge',\n  container_count: 'Container Count',\n  gross_weight_kg: 'Gross Weight (KG)',\n};\nconst FIELD_ORDER = Object.keys(FIELD_LABELS);\n\nconst isIncomplete = !blMap || !siMap;\nconst rows = FIELD_ORDER.map(name => {\n  let bv, sv, match;\n  if (compFieldsMap && compFieldsMap[name]) {\n    const rowFields = compFieldsMap[name].mapValue.fields;\n    bv = getValue(rowFields, 'bl');\n    sv = getValue(rowFields, 'si');\n    match = rowFields.match?.booleanValue ?? null;\n  } else {\n    bv = getValue(blMap, name);\n    sv = getValue(siMap, name);\n    match = null;\n  }\n  return { name, label: FIELD_LABELS[name], bv, sv, match };\n});\n\nconst statusMeta = {\n  cleared: { label: 'CLEARED', className: 'status-cleared' },\n  flagged: { label: 'DISCREPANCIES FLAGGED', className: 'status-flagged' },\n  incomplete: { label: 'INCOMPLETE \\u2014 MISSING BL OR SI', className: 'status-incomplete' },\n  not_run: { label: 'COMPARISON NOT YET RUN', className: 'status-incomplete' },\n};\nconst status = statusMeta[compStatus] ?? statusMeta.not_run;\n\nconst rowsHtml = rows.map(row => {\n  const mismatch = row.match === false;\n  const rowClass = mismatch ? 'mismatch' : '';\n  const icon = row.match === null ? '\\u2014' : row.match ? '\\u2713' : '\\u2717';\n  return `<tr class=\"${rowClass}\">\n    <td class=\"field-name\">${esc(row.label)}</td>\n    <td>${row.sv === null || row.sv === undefined ? '<span class=\"missing\">missing</span>' : esc(row.sv)}</td>\n    <td>${row.bv === null || row.bv === undefined ? '<span class=\"missing\">missing</span>' : esc(row.bv)}</td>\n    <td class=\"match-cell\">${icon}</td>\n  </tr>`;\n}).join('\\n');\n\nconst warningBanner = isIncomplete\n  ? `<div class=\"banner banner-warning\">Warning: this email is missing its ${!blMap && !siMap ? 'Bill of Lading and Shipping Instruction' : !blMap ? 'Bill of Lading' : 'Shipping Instruction'}. Showing partial data only.</div>`\n  : '';\n\nconst html = `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Document Summary - ${esc(email_id)}</title>\n<style>\n  :root { color-scheme: light; }\n  * { box-sizing: border-box; }\n  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 32px; color: #1a1a2e; background: #f4f6f9; }\n  .sheet { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }\n  h1 { font-size: 20px; margin: 0 0 4px; }\n  .subtitle { color: #667; font-size: 13px; margin: 0 0 24px; }\n  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 13px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e2e6ec; }\n  .meta-grid dt { color: #667; font-weight: 600; }\n  .meta-grid dd { margin: 0 0 6px; }\n  .banner { padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }\n  .banner-warning { background: #fff4e5; color: #8a5300; border: 1px solid #ffd699; }\n  .status { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .04em; margin-bottom: 20px; }\n  .status-cleared { background: #e3f8ea; color: #10794b; }\n  .status-flagged { background: #fde8e8; color: #b3261e; }\n  .status-incomplete { background: #fff4e5; color: #8a5300; }\n  table { width: 100%; border-collapse: collapse; font-size: 13px; }\n  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e2e6ec; }\n  th { background: #f4f6f9; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #556; }\n  tr.mismatch td { background: #fdf1f1; }\n  .field-name { font-weight: 600; }\n  .match-cell { text-align: center; font-weight: 700; }\n  tr.mismatch .match-cell { color: #b3261e; }\n  tr:not(.mismatch) .match-cell { color: #10794b; }\n  .missing { color: #99a; font-style: italic; }\n  .sources { margin-top: 20px; font-size: 12px; color: #667; }\n  .footer { margin-top: 32px; font-size: 11px; color: #99a; text-align: right; }\n  @media print {\n    body { background: #fff; padding: 0; }\n    .sheet { box-shadow: none; border-radius: 0; padding: 0; max-width: none; }\n  }\n</style>\n</head>\n<body onload=\"window.print()\">\n<div class=\"sheet\">\n  <h1>Document Comparison Summary</h1>\n  <p class=\"subtitle\">Email ID: ${esc(email_id)}</p>\n  <span class=\"status ${status.className}\">${status.label}</span>\n  ${warningBanner}\n  <dl class=\"meta-grid\">\n    <dt>Subject</dt><dd>${esc(subject)}</dd>\n    <dt>Classification</dt><dd>${esc(classification || '\\u2014')}</dd>\n    <dt>From</dt><dd>${esc(from)}</dd>\n    <dt>To</dt><dd>${esc(to)}</dd>\n    <dt>Received</dt><dd>${esc(receivedAt || '\\u2014')}</dd>\n  </dl>\n  <table>\n    <thead><tr><th>Field</th><th>Shipping Instruction (SI)</th><th>Bill of Lading (BL)</th><th>Match</th></tr></thead>\n    <tbody>${rowsHtml}</tbody>\n  </table>\n  <p class=\"sources\">SI source: ${esc(siFilename || 'not available')} &nbsp;|&nbsp; BL source: ${esc(blFilename || 'not available')}</p>\n  <p class=\"footer\">Generated ${esc(new Date().toISOString())}</p>\n</div>\n</body>\n</html>`;\n\nreturn { json: { success: true, email_id, html } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        920
+      ],
+      "id": "e5f60718-5555-4e6f-8071-829304152637",
+      "name": "Build PDF Summary HTML",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        920
+      ],
+      "id": "f6071829-6666-4f70-8192-930415263748",
+      "name": "Respond Export Success"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const message = String($json.error?.message ?? $json.error ?? 'Export failed').slice(0, 500);\nreturn { json: { success: false, error: message } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1140
+      ],
+      "id": "07182930-7777-4081-a293-041526374859",
+      "name": "Build Export Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        480,
+        1140
+      ],
+      "id": "18293041-8888-4192-b304-152637485960",
+      "name": "Respond Export Error"
     }
   ],
   "connections": {
@@ -1276,6 +1396,82 @@
         [
           {
             "node": "Write Comparison",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF Export Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Export Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Export Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch Email For Export",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Export Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Email For Export": {
+      "main": [
+        [
+          {
+            "node": "Build PDF Summary HTML",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Export Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF Summary HTML": {
+      "main": [
+        [
+          {
+            "node": "Respond Export Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Export Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Export Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Export Error",
             "type": "main",
             "index": 0
           }
