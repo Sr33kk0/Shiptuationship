@@ -1,6 +1,6 @@
 // Server-only: Firestore REST access with a Google OAuth2 refresh token (same model as the n8n credential).
 // Never import this from a client component.
-import { FIELDS, FIRESTORE_KEYS, type Category, type FieldKey, type Fields, type Shipment, type Status } from "./shipments";
+import { FIELDS, FIRESTORE_KEYS, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -45,8 +45,9 @@ async function fs(path: string, init: RequestInit = {}) {
 
 const fsGet = (path: string) => fs(path);
 
-function fsPatch(path: string, fields: Record<string, unknown>) {
-  const mask = Object.keys(fields).map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
+// `paths` is the update mask; pass nested paths ("review.si_fields") to change one key of a map and keep its siblings.
+function fsPatch(path: string, fields: Record<string, unknown>, paths = Object.keys(fields)) {
+  const mask = paths.map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
   return fs(`${path}?${mask}`, { method: "PATCH", body: JSON.stringify({ fields: encodeMap(fields) }) });
 }
 
@@ -132,7 +133,10 @@ export function toShipment(doc: Doc): Shipment {
   const trail: { at: string; action: string }[] = [];
   if (doc.classified_at) trail.push({ at: str(doc.classified_at), action: `Classified as ${str(doc.classification)}` });
   if (comparison.performed_at) trail.push({ at: str(comparison.performed_at), action: `Auto-comparison: ${str(comparison.status)}` });
-  if (review?.reviewed_at) trail.push({ at: str(review.reviewed_at), action: `Manual verification saved (${status === "clean" ? "all matched & cleared" : "override flagged"})` });
+  if (review?.reviewed_at) {
+    const edited = review.edited_side ? `${str(review.edited_side).toUpperCase()} edited, ` : "";
+    trail.push({ at: str(review.reviewed_at), action: `Manual verification saved (${edited}${status === "clean" ? "all matched & cleared" : "override flagged"})` });
+  }
   trail.sort((a, b) => a.at.localeCompare(b.at));
 
   return {
@@ -150,7 +154,7 @@ export function toShipment(doc: Doc): Shipment {
     siRef: str((doc.si_source as Doc | undefined)?.filename) || undefined,
     blRef: str((doc.bl_source as Doc | undefined)?.filename) || undefined,
     extractedFields: toFields(review?.fields) ?? toFields(doc.bl),
-    referenceFields: toFields(doc.si),
+    referenceFields: toFields(review?.si_fields) ?? toFields(doc.si),
     discrepancies,
     auditTrail: trail.map((t) => ({ time: fmtTime(t.at), action: t.action })),
   };
@@ -174,11 +178,19 @@ export async function getEmail(id: string): Promise<Shipment | null> {
   }
 }
 
-export async function saveReview(id: string, fields: Fields, flagged: boolean): Promise<Shipment> {
-  await fsPatch(`emails/${encodeURIComponent(id)}`, {
-    review: { reviewed_at: new Date(), fields: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
-    status: flagged ? "flagged" : "cleared",
-    human_review_required: flagged,
-  });
+// Edits never touch the `si` / `bl` maps the n8n workflow writes; they are stored as overrides under `review`.
+// `review.fields` is the BL override (the name predates SI editing, so existing reviews keep working);
+// `review.si_fields` is the SI override.
+export async function saveReview(id: string, side: Side, fields: Fields, flagged: boolean): Promise<Shipment> {
+  const key = side === "si" ? "si_fields" : "fields";
+  await fsPatch(
+    `emails/${encodeURIComponent(id)}`,
+    {
+      review: { reviewed_at: new Date(), edited_side: side, [key]: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
+      status: flagged ? "flagged" : "cleared",
+      human_review_required: flagged,
+    },
+    ["review.reviewed_at", "review.edited_side", `review.${key}`, "status", "human_review_required"],
+  );
   return (await getEmail(id))!;
 }

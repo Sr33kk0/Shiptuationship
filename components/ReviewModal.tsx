@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CATS, FIELDS, mismatches, type FieldKey, type Fields, type Shipment } from "@/lib/shipments";
+import { CATS, FIELDS, mismatches, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { Icon } from "./Icon";
 
 type Pane = "preview" | "email";
@@ -88,13 +88,14 @@ function Attachments({ names, heading }: { names: string[]; heading: string }) {
 interface Props {
   shipment: Shipment;
   onClose: () => void;
-  onSave: (fields: Fields) => void;
+  onSave: (side: Side, fields: Fields) => void;
   onDone: () => void;
   onToast: (msg: string) => void;
 }
 
 export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onToast }: Props) {
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
+  const [side, setSide] = useState<Side>("bl"); // which document the form edits
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
   const [pane, setPane] = useState<Pane>("preview");
   const [docView, setDocView] = useState<DocView>("split");
@@ -107,8 +108,19 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const ref = s.referenceFields;
-  const bad = ref ? mismatches(form, ref) : [];
+  const saved = (x: Side) => (x === "si" ? s.referenceFields : s.extractedFields);
+  const dirty = FIELDS.some((f) => form[f.key] !== saved(side)?.[f.key]);
+  const switchSide = (next: Side) => {
+    if (next === side) return;
+    if (dirty) onToast(`Discarded unsaved ${side.toUpperCase()} edits`);
+    setSide(next);
+    setForm(saved(next) ?? ({} as Fields));
+  };
+
+  // The edited side shows the live form; the other side shows what is saved.
+  const si = side === "si" ? form : s.referenceFields;
+  const bl = side === "bl" ? form : s.extractedFields;
+  const bad = si && bl ? mismatches(si, bl) : [];
 
   return (
     <div className="overlay">
@@ -147,7 +159,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
           </div>
         </div>
 
-        {isCmp && ref ? (
+        {isCmp && si && bl ? (
           <div className="cmp">
             {s.status === "discrepancy" && s.discrepancies.length > 0 && (
               <div className="banner">
@@ -168,6 +180,18 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                     <b>Manifest Fields</b>
                     <span>Edit to override</span>
                   </div>
+                  <div className="form-side">
+                    <span>Editing</span>
+                    <Seg
+                      sm
+                      value={side}
+                      onChange={switchSide}
+                      options={[
+                        ["bl", "Carrier Draft BL"],
+                        ["si", "Customer SI"],
+                      ]}
+                    />
+                  </div>
                   <div className="form-fields">
                     {FIELDS.map((f, i) => {
                       const off = bad.includes(f.key);
@@ -179,7 +203,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                             </label>
                             {off && (
                               <span>
-                                SI: {ref[f.key]}
+                                {side === "si" ? "BL" : "SI"}: {(side === "si" ? bl : si)[f.key]}
                                 {"unit" in f ? f.unit : ""}
                               </span>
                             )}
@@ -193,16 +217,16 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                     <button
                       className="btn ghost"
                       onClick={() => {
-                        setForm(s.extractedFields!);
-                        onToast("Reset fields back to carrier's draft values");
+                        setForm(saved(side)!);
+                        onToast(`Reset ${side.toUpperCase()} fields to their last saved values`);
                       }}
                     >
                       <Icon d="refresh" size={14} sw={2} />
                       Reset
                     </button>
-                    <button className="btn dark grow" onClick={() => onSave(form)}>
+                    <button className="btn dark grow" onClick={() => onSave(side, form)}>
                       <Icon d="check" size={14} sw={2.2} />
-                      Save Changes
+                      Save {side.toUpperCase()} Changes
                     </button>
                   </div>
                 </div>
@@ -227,8 +251,8 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                       />
                     </div>
                     <div className="docs">
-                      {docView !== "bl" && <Paper kind="si" refNo={s.siRef} values={ref} bad={[]} />}
-                      {docView !== "si" && <Paper kind="bl" refNo={s.blRef} values={form} bad={bad} />}
+                      {docView !== "bl" && <Paper kind="si" refNo={s.siRef} values={si} bad={side === "si" ? bad : []} />}
+                      {docView !== "si" && <Paper kind="bl" refNo={s.blRef} values={bl} bad={bad} />}
                     </div>
                   </>
                 ) : (
