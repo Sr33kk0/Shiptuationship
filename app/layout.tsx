@@ -16,7 +16,11 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* apply the saved colour scheme before first paint, so there is no flash of the default one */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("skymetrics-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}` }} />
+      </head>
       <body className={figtree.variable}>
         <ShipmentsProvider>
           <Shell>{children}</Shell>

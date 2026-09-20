@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGeoChart, type GeoChartInstance } from "@/lib/googleCharts";
 import { countryName, type CountryCount } from "@/lib/ports";
+import { useTheme } from "@/lib/theme";
 import { useInView } from "@/lib/useInView";
 import CountUp from "./CountUp";
 
@@ -11,17 +12,20 @@ interface Props {
   note: string;
   rows: CountryCount[]; // shipments per country, biggest first
   palette: string[]; // light -> dark
+  paletteDark: string[]; // the same ramp for the dark scheme: dull -> bright, since bright reads as "more" on a dark map
   order: number; // staggers the panels
   loading: boolean;
 }
 
-export default function GeoHeat({ title, note, rows, palette, order, loading }: Props) {
+export default function GeoHeat({ title, note, rows, palette, paletteDark, order, loading }: Props) {
   const [panel, seen] = useInView<HTMLElement>(); // the entrance plays when the panel scrolls into view
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<GeoChartInstance | null>(null);
   const [lib, setLib] = useState<"loading" | "ready" | "error">("loading");
   const [width, setWidth] = useState(0);
   const [drawn, setDrawn] = useState(false);
+  const theme = useTheme(); // the map colours are read from the scheme, so a switch has to redraw it
+  const colors = theme === "dark" ? paletteDark : palette;
   const key = rows.map((r) => `${r.code}:${r.count}`).join(","); // redraw only when the numbers actually change
 
   useEffect(() => {
@@ -49,6 +53,8 @@ export default function GeoHeat({ title, note, rows, palette, order, loading }: 
     const g = window.google;
     if (lib !== "ready" || !el || !g || !width || !rows.length) return;
     chart.current ??= new g.visualization.GeoChart(el);
+    const css = getComputedStyle(document.documentElement);
+    const empty = css.getPropertyValue("--map-land").trim() || "#eceef2"; // land with no shipments
     chart.current.draw(g.visualization.arrayToDataTable([["Country", "Shipments"], ...rows.map((r) => [{ v: r.code, f: countryName(r.code) }, r.count])]), {
       width,
       height: Math.round(width * 0.62),
@@ -56,17 +62,17 @@ export default function GeoHeat({ title, note, rows, palette, order, loading }: 
       displayMode: "regions",
       resolution: "countries",
       backgroundColor: "transparent",
-      datalessRegionColor: "#eceef2",
-      defaultColor: "#eceef2",
-      colorAxis: { colors: palette, minValue: 0 },
-      legend: { textStyle: { color: "#737373", fontSize: 12 } },
+      datalessRegionColor: empty,
+      defaultColor: empty,
+      colorAxis: { colors, minValue: 0 },
+      legend: { textStyle: { color: css.getPropertyValue("--muted").trim() || "#737373", fontSize: 12 } },
       tooltip: { textStyle: { fontSize: 13 } },
       keepAspectRatio: true,
     });
     setDrawn(true);
     // rows is represented by `key`; passing it directly would redraw on every parent render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lib, width, key, palette]);
+  }, [lib, width, key, colors]);
 
   useEffect(() => () => chart.current?.clearChart(), []);
 
@@ -88,7 +94,7 @@ export default function GeoHeat({ title, note, rows, palette, order, loading }: 
         <ul className="geo-top">
           {rows.slice(0, 3).map((r, i) => (
             <li key={r.code} style={{ "--i": i } as React.CSSProperties}>
-              <span className="legend-dot" style={{ background: palette[palette.length - 1] }} />
+              <span className="legend-dot" style={{ background: colors[colors.length - 1] }} />
               <span>{countryName(r.code)}</span>
               <b>
                 <CountUp value={seen ? r.count : 0} delay={order * 0.12 + 1.1 + i * 0.1} />

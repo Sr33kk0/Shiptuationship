@@ -16,6 +16,8 @@ import { NavLink } from "./Shell";
 // Map colour ramps, light -> dark. Constants, so the maps aren't redrawn on every render.
 const OUTBOUND = ["#fde2e6", "#fb7185", "#be123c"];
 const INBOUND = ["#dbeafe", "#60a5fa", "#1d4ed8"];
+const OUTBOUND_DARK = ["#a23a58", "#f0587a", "#ffb3c1"];
+const INBOUND_DARK = ["#1f6a9b", "#38bdf8", "#bae6fd"];
 
 // "64 shipments · 5 countries", plus a note if some ports couldn't be tied to a country
 const mapNote = (m: { rows: unknown[]; placed: number; unplaced: number }) =>
@@ -157,8 +159,8 @@ export default function Dashboard() {
       </div>
 
       <div className="bars-grid">
-        <GeoHeat order={0} loading={loading} palette={OUTBOUND} title="Outbound · Port of Loading" note={mapNote(outbound)} rows={outbound.rows} />
-        <GeoHeat order={1} loading={loading} palette={INBOUND} title="Inbound · Port of Discharge" note={mapNote(inbound)} rows={inbound.rows} />
+        <GeoHeat order={0} loading={loading} palette={OUTBOUND} paletteDark={OUTBOUND_DARK} title="Outbound · Port of Loading" note={mapNote(outbound)} rows={outbound.rows} />
+        <GeoHeat order={1} loading={loading} palette={INBOUND} paletteDark={INBOUND_DARK} title="Inbound · Port of Discharge" note={mapNote(inbound)} rows={inbound.rows} />
       </div>
     </div>
   );

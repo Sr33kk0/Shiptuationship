@@ -37,6 +37,7 @@ const PAGES = [
   { href: "/audit/user", label: "User Log", icon: "user" },
   { href: "/audit/system", label: "System Log", icon: "chip" },
 ] as const;
+const SETTINGS = { href: "/settings", label: "Settings", icon: "cog" } as const;
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,7 +45,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [leaving, setLeaving] = useState(false);
   const [target, setTarget] = useState<string | null>(null); // page being navigated to, so the menu highlight moves on click
   const [hl, setHl] = useState<{ y: number; h: number } | null>(null);
-  const menuRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState(false); // the icon-only sidebar (desktop)
   const [drawer, setDrawer] = useState(false); // the slide-in menu (phones and small tablets)
   const [toast, setToast] = useState<string | null>(null);
@@ -74,8 +75,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   // One highlight slides between the menu items; measured so it also fits the collapsed sidebar.
   const current = target ?? pathname;
   useLayoutEffect(() => {
-    const el = menuRef.current?.querySelector<HTMLElement>(".nav-item.active");
-    if (el) setHl({ y: el.offsetTop, h: el.offsetHeight });
+    const box = menuRef.current;
+    const el = box?.querySelector<HTMLElement>(".nav-item.active");
+    if (box && el) {
+      // measured against the whole menu, so the one highlight can slide between both groups
+      const r = el.getBoundingClientRect();
+      setHl({ y: r.top - box.getBoundingClientRect().top, h: r.height });
+    }
   }, [current, compact]);
 
   const navigate = (href: string) => {
@@ -92,6 +98,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setToast(null), 3000);
   };
+
+  const navLink = (p: { href: string; label: string; icon: React.ComponentProps<typeof Icon>["d"] }) => (
+    <NavLink key={p.href} href={p.href} className={`nav-item primary${current === p.href ? " active" : ""}`} title={p.label} aria-current={pathname === p.href ? "page" : undefined}>
+      <Icon d={p.icon} size={18} />
+      {!compact && <span>{p.label}</span>}
+    </NavLink>
+  );
 
   return (
     <NavContext.Provider value={navigate}>
@@ -121,7 +134,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="backdrop" onClick={() => setDrawer(false)} aria-hidden="true" />
 
         <aside className="sidebar" id="sidebar" inert={isMobile && !drawer}>
-          <div className="sb-body">
+          <div className="sb-body" ref={menuRef}>
+            {hl && <span className="nav-hl" style={{ transform: `translateY(${hl.y}px)`, height: hl.h }} />}
             <div className="sb-head">
               <NavLink href="/" className="brand" title="Go to the dashboard" aria-label="Skymetrics, go to the dashboard">
                 <div className="logo">
@@ -147,46 +161,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
             <div className="sb-group">
               {!compact && <span className="sb-label">Menu</span>}
-              <nav className={`sb-nav${hl ? " has-hl" : ""}`} ref={menuRef}>
-                {hl && <span className="nav-hl" style={{ transform: `translateY(${hl.y}px)`, height: hl.h }} />}
-                {PAGES.map((p) => (
-                  <NavLink key={p.href} href={p.href} className={`nav-item primary${current === p.href ? " active" : ""}`} title={p.label} aria-current={pathname === p.href ? "page" : undefined}>
-                    <Icon d={p.icon} size={18} />
-                    {!compact && <span>{p.label}</span>}
-                  </NavLink>
-                ))}
-              </nav>
+              <nav className={`sb-nav${hl ? " has-hl" : ""}`}>{PAGES.map(navLink)}</nav>
             </div>
 
             <div className="sb-group">
-              {!compact && <span className="sb-label">System &amp; Rules</span>}
-              <nav className="sb-nav">
-                {(
-                  [
-                    ["Carrier Directory", "ship", "Carrier Directory: Maersk, MSC, Cosco connected."],
-                    ["Matching Rules", "filter", "Tolerance Rules: Gross weight ±50kg, container count exact match."],
-                  ] as const
-                ).map(([label, icon, msg]) => (
-                  <button
-                    key={label}
-                    className="nav-item"
-                    onClick={() => {
-                      setDrawer(false);
-                      showToast(msg);
-                    }}
-                    title={label}
-                  >
-                    {compact ? (
-                      <Icon d={icon} />
-                    ) : (
-                      <>
-                        <span>{label}</span>
-                        <Icon d="chevR" sw={2} />
-                      </>
-                    )}
-                  </button>
-                ))}
-              </nav>
+              {!compact && <span className="sb-label">System</span>}
+              <nav className={`sb-nav${hl ? " has-hl" : ""}`}>{navLink(SETTINGS)}</nav>
             </div>
           </div>
         </aside>
