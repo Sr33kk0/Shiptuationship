@@ -19,8 +19,14 @@ function Seg<T extends string>({ value, options, onChange, sm }: { value: T; opt
   );
 }
 
+// One document. A field that differs from the other document is shown in red, but only on the document being edited (see the calls below).
 function Paper({ kind, refNo, values, bad }: { kind: "si" | "bl"; refNo?: string; values: Fields; bad: FieldKey[] }) {
-  const cls = (k: FieldKey) => (bad.includes(k) ? " bad" : "");
+  const cell = (k: FieldKey, label: string, extra = "", fmt = (v: string) => v) => (
+    <div>
+      <span className="k">{label}</span>
+      <span className={`v${extra}${bad.includes(k) ? " bad" : ""}`}>{fmt(values[k])}</span>
+    </div>
+  );
   return (
     <div className={`paper ${kind}`}>
       <div className="paper-head">
@@ -31,37 +37,16 @@ function Paper({ kind, refNo, values, bad }: { kind: "si" | "bl"; refNo?: string
         {refNo && <span className="ref">{refNo}</span>}
       </div>
       <div className="paper-body">
-        {(
-          [
-            ["shipper", "1. Shipper"],
-            ["consignee", "2. Consignee"],
-            ["notifyParty", "3. Notify Party"],
-          ] as const
-        ).map(([k, label]) => (
-          <div key={k}>
-            <span className="k">{label}</span>
-            <span className="v">{values[k]}</span>
-          </div>
-        ))}
+        {cell("shipper", "1. Shipper")}
+        {cell("consignee", "2. Consignee")}
+        {cell("notifyParty", "3. Notify Party")}
         <div className="paper-row">
-          <div>
-            <span className="k">4. POL</span>
-            <span className="v port">{values.pol}</span>
-          </div>
-          <div>
-            <span className="k">5. POD</span>
-            <span className={`v port${cls("pod")}`}>{values.pod}</span>
-          </div>
+          {cell("pol", "4. POL", " port")}
+          {cell("pod", "5. POD", " port")}
         </div>
         <div className="paper-row">
-          <div>
-            <span className="k">6. Container Count</span>
-            <span className={`v num${cls("containerCount")}`}>{values.containerCount} x 40HC</span>
-          </div>
-          <div>
-            <span className="k">7. Gross Weight</span>
-            <span className={`v num${cls("grossWeightKg")}`}>{values.grossWeightKg} kg</span>
-          </div>
+          {cell("containerCount", "6. Container Count", " num", (v) => `${v} x 40HC`)}
+          {cell("grossWeightKg", "7. Gross Weight", " num", (v) => `${v} kg`)}
         </div>
       </div>
     </div>
@@ -125,6 +110,17 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    if (!isCmp) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]")) return; // not while typing in a field
+      if (e.key === "ArrowRight") setPane("email");
+      if (e.key === "ArrowLeft") setPane("preview");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isCmp]);
+
   const saved = (x: Side) => (x === "si" ? s.referenceFields : s.extractedFields);
   const dirty = FIELDS.some((f) => form[f.key] !== saved(side)?.[f.key]);
   const switchSide = (next: Side) => {
@@ -138,6 +134,14 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const si = side === "si" ? form : s.referenceFields;
   const bl = side === "bl" ? form : s.extractedFields;
   const bad = si && bl ? mismatches(si, bl) : [];
+  // What to mark. Normally the live comparison of the two documents. If the automatic check flagged the email but the two documents match
+  // exactly (it can compare more loosely than this screen does), fall back to the fields it named, so the banner never has nothing to point at.
+  const named = s.status === "discrepancy" ? s.discrepancies.map((d) => d.field) : [];
+  const flagged: FieldKey[] = bad.length ? bad : !dirty ? named : [];
+  // The banner lists exactly what is marked below: the live differences, or the automatic check's own wording when it had to be used instead.
+  const summary = bad.length && si && bl
+    ? bad.map((k) => `${FIELDS.find((f) => f.key === k)!.label} (${si[k]} on SI vs ${bl[k]} on Draft BL)`)
+    : s.discrepancies.map((d) => `${d.label} (${d.si} on SI vs ${d.bl} on Draft BL)`);
 
   return (
     <div className={`overlay${closing ? " closing" : ""}`}>
@@ -181,12 +185,12 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
 
         {isCmp && si && bl ? (
           <div className="cmp">
-            {s.status === "discrepancy" && s.discrepancies.length > 0 && (
+            {s.status === "discrepancy" && summary.length > 0 && (
               <div className="banner">
                 <div>
                   <Icon d="alert" sw={2} />
                   <span>
-                    <strong>Discrepancy Detected:</strong> {s.discrepancies.map((d) => `${d.label} (${d.si} on SI vs ${d.bl} on Draft BL)`).join(" • ")}
+                    <strong>Discrepancy Detected:</strong> {summary.join(" • ")}
                   </span>
                 </div>
                 <em>Action Required</em>
@@ -214,7 +218,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                   </div>
                   <div className="form-fields">
                     {FIELDS.map((f, i) => {
-                      const off = bad.includes(f.key);
+                      const off = flagged.includes(f.key);
                       return (
                         <div key={f.key} className="field">
                           <div className="field-top">
@@ -273,24 +277,35 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                     </div>
                     <div className="docs">
                       {/* keyed by the view, so each switch re-creates the papers and they fade in again (typing in the form does not) */}
-                      {docView !== "bl" && <Paper key={`si-${docView}`} kind="si" refNo={s.siRef} values={si} bad={side === "si" ? bad : []} />}
-                      {docView !== "si" && <Paper key={`bl-${docView}`} kind="bl" refNo={s.blRef} values={bl} bad={bad} />}
+                      {/* the red text follows the document being edited (the "Editing" switch): the SI's wrong fields when editing the SI, the BL's when editing the BL, never both */}
+                      {docView !== "bl" && <Paper key={`si-${docView}`} kind="si" refNo={s.siRef} values={si} bad={side === "si" ? flagged : []} />}
+                      {docView !== "si" && <Paper key={`bl-${docView}`} kind="bl" refNo={s.blRef} values={bl} bad={side === "bl" ? flagged : []} />}
                     </div>
+                    <button className="pane-jump next" onClick={() => setPane("email")} title="Read the email (right arrow key)">
+                      Read Email
+                      <Icon d="chevR" size={16} sw={2.4} />
+                    </button>
                   </>
                 ) : (
-                  <div className="email">
-                    <div className="email-card">
-                      <div className="email-head">
-                        <h4>{s.subject}</h4>
-                        <div className="email-meta">
-                          <span>From: {s.sender}</span>
-                          <span>Date: {fmtWhen(s)}</span>
+                  <>
+                    <div className="email">
+                      <div className="email-card">
+                        <div className="email-head">
+                          <h4>{s.subject}</h4>
+                          <div className="email-meta">
+                            <span>From: {s.sender}</span>
+                            <span>Date: {fmtWhen(s)}</span>
+                          </div>
                         </div>
+                        <div className="email-body">{s.emailBody}</div>
+                        <Attachments names={s.attachmentNames} heading={`Attachments (${s.attachmentNames.length})`} />
                       </div>
-                      <div className="email-body">{s.emailBody}</div>
-                      <Attachments names={s.attachmentNames} heading={`Attachments (${s.attachmentNames.length})`} />
                     </div>
-                  </div>
+                    <button className="pane-jump prev" onClick={() => setPane("preview")} title="Back to the comparison (left arrow key)">
+                      <Icon d="chevL" size={16} sw={2.4} />
+                      Comparison
+                    </button>
+                  </>
                 )}
               </div>
             </div>

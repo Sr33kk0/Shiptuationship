@@ -123,11 +123,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <button className="topbar-btn" onClick={() => setDrawer(true)} aria-label="Open menu" aria-expanded={drawer} aria-controls="sidebar">
             <Icon d="menu" size={22} sw={2} />
           </button>
-          <NavLink href="/" className="topbar-home" aria-label="Skymetrics, go to the dashboard">
+          <NavLink href="/" className="topbar-home" aria-label="Shiptuationship, go to the dashboard">
             <div className="logo sm">
               <img src="/shiplogo.svg" alt="" />
             </div>
-            <span className="topbar-title trunc">Skymetrics</span>
+            <span className="topbar-title trunc">Shiptuationship</span>
           </NavLink>
           <Profile />
         </header>
@@ -137,14 +137,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div className="sb-body" ref={menuRef}>
             {hl && <span className="nav-hl" style={{ transform: `translateY(${hl.y}px)`, height: hl.h }} />}
             <div className="sb-head">
-              <NavLink href="/" className="brand" title="Go to the dashboard" aria-label="Skymetrics, go to the dashboard">
+              <NavLink href="/" className="brand" title="Go to the dashboard" aria-label="Shiptuationship, go to the dashboard">
                 <div className="logo">
                   <img src="/shiplogo.svg" alt="" />
                 </div>
                 {!compact && (
                   <div style={{ minWidth: 0 }}>
-                    <h2 className="trunc">Skymetrics</h2>
-                    <small className="trunc">Ocean Manifest Desk</small>
+                    <h2 className="trunc">Shiptuationship</h2>
+                    <small className="trunc">SI &amp; BL Verification Desk</small>
                   </div>
                 )}
               </NavLink>

@@ -394,7 +394,7 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .btn.grow { flex: 1; padding: 10px 16px; }
 .btn.lg { padding: 8px 20px; font-size: 14px; line-height: 20px; font-weight: 600; }
 
-.doc-pane { flex: 1; background: var(--pane); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.doc-pane { position: relative; flex: 1; background: var(--pane); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .doc-bar { padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; }
 .toggle { padding: 6px 12px; border-radius: 8px; background: var(--line); color: var(--text-3); font-weight: 600; font-size: 12px; line-height: 16px; transition: background 0.15s; }
 .toggle:hover { background: var(--edge); }
@@ -423,6 +423,15 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .v.num { font-weight: 700; font-size: 16px; line-height: 24px; }
 .v.bad { color: var(--rose); }
 .v.port.bad { font-weight: 700; }
+/* the arrow that flips between the comparison and the email, in the empty space under the documents */
+.pane-jump { position: absolute; bottom: 20px; z-index: 5; display: flex; align-items: center; gap: 6px; padding: 10px 14px 10px 18px; border-radius: 9999px; background: var(--solid); color: var(--on-solid); font-size: 13px; line-height: 20px; font-weight: 700; box-shadow: var(--shadow-md); transition: transform 0.15s, box-shadow 0.15s; }
+.pane-jump.next { right: 24px; }
+.pane-jump.prev { left: 24px; padding: 10px 18px 10px 14px; }
+.pane-jump:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.pane-jump.next:hover svg { transform: translateX(3px); }
+.pane-jump.prev:hover svg { transform: translateX(-3px); }
+.pane-jump svg { transition: transform 0.15s; }
+.doc-pane .docs, .doc-pane .email { padding-bottom: 84px; } /* room so the arrow never sits on top of a document */
 
 .email { flex: 1; padding: 32px; overflow-y: auto; max-width: 768px; margin: 0 auto; width: 100%; }
 .email.plain { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; }
@@ -749,3 +758,4 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 [data-theme="dark"] .paper.bl h4 { color: var(--accent-text); }
 [data-theme="dark"] .paper.bl .ref { background: var(--accent-soft); border-color: rgba(56, 189, 248, 0.4); color: var(--accent-text); }
 [data-theme="dark"] .v.bad { color: #fb7185; }
+@media (max-width: 340px) { .topbar-title { font-size: 14px; } } /* the longer name still fits on the smallest phones */

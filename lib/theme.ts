@@ -14,7 +14,7 @@ export const THEMES = [
 
 export type ThemeId = (typeof THEMES)[number]["id"];
 
-export const THEME_KEY = "skymetrics-theme";
+export const THEME_KEY = "shiptuationship-theme";
 const listeners = new Set<() => void>();
 
 const current = (): ThemeId => {

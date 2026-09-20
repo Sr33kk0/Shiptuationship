@@ -12,7 +12,7 @@ export default function Settings() {
       <header className="page-head fade-up">
         <div>
           <h1>Settings</h1>
-          <p>Personalise how Skymetrics looks on this device.</p>
+          <p>Personalise how Shiptuationship looks on this device.</p>
         </div>
         <Profile />
       </header>
