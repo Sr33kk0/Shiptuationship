@@ -17,7 +17,7 @@ Next.js route handlers (`app/api/emails`) read/write Firestore over REST using a
 2. Google Cloud console → APIs & Services → Credentials: use the OAuth client n8n already uses (or create a Web client). Put its ID/secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
 3. Get a refresh token for scope `https://www.googleapis.com/auth/datastore` (e.g. [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/) with "Use your own OAuth credentials", add `https://developers.google.com/oauthplayground` as an authorised redirect URI on the client). Put it in `GOOGLE_REFRESH_TOKEN`.
 4. The consenting Google account needs the `Cloud Datastore User` IAM role on project `hokkien`.
-5. `npm run dev` → `GET /api/emails` returns the `emails` collection mapped to the dashboard shape; `POST /api/emails/{id}/review` saves a manual override (`review`, `status`, `human_review_required`).
+5. `npm run dev` → `GET /api/emails` returns the `emails` collection mapped to the dashboard shape; `POST /api/emails/{id}/review` with `{ side: "si" | "bl", fields }` saves a manual override for that side only (`review.si_fields` / `review.fields`, plus `status`, `human_review_required`); the `si` / `bl` maps written by n8n are never modified.
 
 ---
 ## Moderator actions

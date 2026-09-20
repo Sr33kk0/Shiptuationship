@@ -1,6 +1,6 @@
 // Server-only: Firestore REST access with a Google OAuth2 refresh token (same model as the n8n credential).
 // Never import this from a client component.
-import { FIELDS, FIRESTORE_KEYS, mismatches, type Category, type FieldKey, type Fields, type Shipment, type Status } from "./shipments";
+import { FIELDS, FIRESTORE_KEYS, mismatches, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -103,10 +103,16 @@ export function toShipment(doc: Doc): Shipment {
   const sender = m ? m[2] : from;
   const senderName = m && m[1] ? m[1].replace(/^"|"$/g, "") : sender;
 
-  const received = str(doc.received_at);
-  const ts = Date.parse(received);
-  const rawDate = Number.isNaN(ts) ? received : new Date(ts).toISOString().slice(0, 10);
-  const date = Number.isNaN(ts) ? received : new Date(ts).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  // An email's date is when n8n classified it (`classified_at`, a Firestore timestamp). `received_at` is kept only as a fallback:
+  // it is an empty string on every document today.
+  const stamped = str(doc.classified_at) || str(doc.received_at);
+  const ts = Date.parse(stamped);
+  const when = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const at = Number.isNaN(ts) ? "" : when.toISOString(); // full timestamp, for sorting by time within a day
+  // `rawDate` (the filter key) and `date` (the label) are built from the same local calendar day, so the date filter always agrees with the table.
+  const rawDate = Number.isNaN(ts) ? stamped : `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`;
+  const date = Number.isNaN(ts) ? stamped : when.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
   const review = doc.review as Doc | undefined;
   const read = doc.read_status as Doc | undefined;
@@ -128,7 +134,10 @@ export function toShipment(doc: Doc): Shipment {
   const trail: { at: string; action: string }[] = [];
   if (doc.classified_at) trail.push({ at: str(doc.classified_at), action: `Classified as ${str(doc.classification)}` });
   if (comparison.performed_at) trail.push({ at: str(comparison.performed_at), action: `Auto-comparison: ${str(comparison.status)}` });
-  if (review?.reviewed_at) trail.push({ at: str(review.reviewed_at), action: `Manual verification saved by ${str(review.reviewed_by) || "unknown reviewer"}` });
+  if (review?.reviewed_at) {
+    const edited = review.edited_side ? `${str(review.edited_side).toUpperCase()} edited, ` : "";
+    trail.push({ at: str(review.reviewed_at), action: `Manual verification saved by ${str(review.reviewed_by) || "unknown reviewer"} (${edited}${status === "clean" ? "all matched & cleared" : "override flagged"})` });
+  }
   if (read?.marked_at) trail.push({ at: str(read.marked_at), action: `Marked as read by ${str(read.marked_by) || "unknown reviewer"}` });
   trail.sort((a, b) => a.at.localeCompare(b.at));
 
@@ -140,6 +149,7 @@ export function toShipment(doc: Doc): Shipment {
     category: CATEGORY[str(doc.classification)] ?? "other",
     date,
     rawDate,
+    at,
     status,
     reviewedBy: str(review?.reviewed_by),
     reviewedAt: str(review?.reviewed_at),
@@ -152,7 +162,7 @@ export function toShipment(doc: Doc): Shipment {
     siRef: str((doc.si_source as Doc | undefined)?.filename) || undefined,
     blRef: str((doc.bl_source as Doc | undefined)?.filename) || undefined,
     extractedFields: toFields(review?.fields) ?? toFields(doc.bl),
-    referenceFields: toFields(doc.si),
+    referenceFields: toFields(review?.si_fields) ?? toFields(doc.si),
     discrepancies,
     auditTrail: trail.map((t) => ({ time: fmtTime(t.at), action: t.action })),
   };
@@ -181,7 +191,10 @@ const MODERATOR = "DanielHo";
 const requestTime = (fieldPath: string) => ({ fieldPath, setToServerValue: "REQUEST_TIME" });
 const actionError = (message: string, status: number) => Object.assign(new Error(message), { status });
 
-export async function saveModeratorAction(id: string, fields?: Fields): Promise<Shipment> {
+// Edits never touch the `si` / `bl` maps the n8n workflow writes; they are stored as overrides under `review`.
+// `review.fields` is the BL override (the name predates SI editing, so existing reviews keep working);
+// `review.si_fields` is the SI override. Without `fields` the call marks the email as read instead.
+export async function saveModeratorAction(id: string, fields?: Fields, side: Side = "bl"): Promise<Shipment> {
   const path = `emails/${encodeURIComponent(id)}`;
   let snapshot: { name: string; fields?: Record<string, FsValue>; updateTime: string };
   try {
@@ -193,19 +206,24 @@ export async function saveModeratorAction(id: string, fields?: Fields): Promise<
   const before = decodeMap(snapshot.fields ?? {});
   const current = toShipment(before);
   if (!fields && current.isRead) return current;
-  if (fields && (current.category !== "document-comparison" || !current.referenceFields)) {
-    throw actionError("No Shipping Instruction comparison available for this email", 409);
+  if (fields && (current.category !== "document-comparison" || !current.referenceFields || !current.extractedFields)) {
+    throw actionError("Shipping Instruction and Draft BL must both be extracted before editing", 409);
   }
-  const flagged = fields ? mismatches(fields, current.referenceFields!).length > 0 : false;
+  const saved = side === "si" ? current.referenceFields : current.extractedFields; // the side being edited
+  const other = side === "si" ? current.extractedFields : current.referenceFields; // the side it is compared against
+  const flagged = fields ? mismatches(fields, other!).length > 0 : false;
+  const reviewKey = side === "si" ? "si_fields" : "fields";
   const updates: Doc = fields ? {
-    review: { reviewed_by: MODERATOR, fields: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
+    review: { reviewed_by: MODERATOR, edited_side: side, [reviewKey]: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
     status: flagged ? "flagged" : "cleared",
     human_review_required: flagged,
   } : { read_status: { is_read: true, marked_by: MODERATOR } };
+  // Nested paths for `review`, so saving one side keeps the other side's override.
+  const mask = fields ? ["review.reviewed_by", "review.edited_side", `review.${reviewKey}`, "status", "human_review_required"] : Object.keys(updates);
   const timeField = fields ? "review.reviewed_at" : "read_status.marked_at";
   const changes: Doc = fields ? Object.fromEntries(FIELDS
-    .filter((f) => current.extractedFields?.[f.key] !== fields[f.key])
-    .map((f) => [FIRESTORE_KEYS[f.key], { before: current.extractedFields?.[f.key] ?? null, after: fields[f.key] }])) : {};
+    .filter((f) => saved?.[f.key] !== fields[f.key])
+    .map((f) => [FIRESTORE_KEYS[f.key], { before: saved?.[f.key] ?? null, after: fields[f.key] }])) : {};
   const writes: unknown[] = [];
   const moderatorName = `${BASE.slice("https://firestore.googleapis.com/v1/".length)}/moderators/${MODERATOR}`;
   try {
@@ -220,13 +238,14 @@ export async function saveModeratorAction(id: string, fields?: Fields): Promise<
   }
   writes.push({
     update: { name: snapshot.name, fields: encodeMap(updates) },
-    updateMask: { fieldPaths: Object.keys(updates) },
+    updateMask: { fieldPaths: mask },
     currentDocument: { updateTime: snapshot.updateTime },
     updateTransforms: [requestTime(timeField)],
   }, {
     update: { name: `${snapshot.name}/activity/${crypto.randomUUID()}`, fields: encodeMap({
       moderator_id: MODERATOR,
       action: fields ? "review_saved" : "marked_read",
+      edited_side: fields ? side : null,
       changes,
       before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null } : { read_status: before.read_status ?? null },
       after: updates,
@@ -238,7 +257,9 @@ export async function saveModeratorAction(id: string, fields?: Fields): Promise<
     const result = await fs(":commit", { method: "POST", body: JSON.stringify({ writes }) });
     const map = updates[fields ? "review" : "read_status"] as Doc;
     map[fields ? "reviewed_at" : "marked_at"] = result.writeResults[writes.length - 2].transformResults[0].timestampValue;
-    return toShipment({ ...before, ...updates });
+    // Mirror the nested mask: the untouched side's override under `review` survives the save.
+    const review = fields ? { ...((before.review as Doc | undefined) ?? {}), ...(updates.review as Doc) } : before.review;
+    return toShipment({ ...before, ...updates, review });
   } catch (e) {
     if ((e as { status?: number }).status === 409 || ((e as Error).message.includes("FAILED_PRECONDITION"))) {
       throw actionError("The record changed while saving. Refresh and try again.", 409);
