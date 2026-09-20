@@ -667,7 +667,7 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .dr-pop, .dr-pop.closing { animation: none; } }
 @media (pointer: coarse) { .dr-trigger { min-height: 36px; } .daterange .clear.inline { padding: 9px; } }
 
-/* audit log: a Discord-style feed, newest first, grouped by day */
+/* audit log: a feed of entries, newest first, grouped by day */
 .log { list-style: none; margin: 0; padding: 0 0 12px; }
 .log-empty { padding: 64px 0; text-align: center; color: var(--faint); font-size: 14px; }
 .day { display: flex; align-items: center; gap: 12px; padding: 18px 24px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); }
@@ -694,7 +694,7 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .ev-embed dd { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--faint); }
 .ev-embed del { padding: 0 6px; border-radius: 4px; color: #be123c; background: #fff1f2; }
 .ev-embed ins { padding: 0 6px; border-radius: 4px; color: #047857; background: #ecfdf5; text-decoration: none; }
-/* "Filter by ..." dropdowns, as in Discord's audit log */
+/* "Filter by ..." dropdowns for the audit logs */
 .dd-row { display: flex; flex-wrap: wrap; gap: 10px; position: relative; }
 .dd { position: relative; min-width: 0; }
 .dd-btn { min-height: 38px; max-width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--field); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; line-height: 20px; transition: background 0.15s, border-color 0.15s; }

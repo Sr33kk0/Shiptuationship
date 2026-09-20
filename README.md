@@ -9,7 +9,7 @@
 **From a noisy shipping inbox to a clear discrepancy report.**
 Shiptuationship reads every incoming email, works out what it is, compares the Shipping Instruction (SI) against the draft Bill of Lading (BL) on seven fields, and hands anything uncertain to a human reviewer, with the evidence attached.
 
-*Built for the **Averis Hackathon 2026**. Problem statement: [`Averis_Hackathon_2026_Problem_Statement.pdf`](Averis_Hackathon_2026_Problem_Statement.pdf)*
+*Built for the **Averis Hackathon 2026**.*
 
 </div>
 
@@ -31,7 +31,7 @@ Shiptuationship reads every incoming email, works out what it is, compares the S
 
 ## 1. The problem
 
-> Summarised from [`Averis_Hackathon_2026_Problem_Statement.pdf`](Averis_Hackathon_2026_Problem_Statement.pdf) ("Shipping document verification: from email inbox to discrepancy report").
+> **The challenge:** turn a busy shipping-operations inbox into a clear, trustworthy discrepancy report, from the raw email all the way to "these fields don't match, and here is why."
 
 ### 1.1 Context
 
@@ -70,20 +70,20 @@ For a **document-checking request**, the team compares a **Shipping Instruction 
 
 The report must make it easy to see **which email was checked, whether a mismatch was found, and exactly what needs attention**. If all seven fields match, report **"No mismatch detected."**
 
-> **Worked example from the brief:** the SI lists 3 containers and 22,000 kg, the BL lists 4 containers and 22,000 kg. If everything else agrees, flag **only** the container count and show **SI: 3 / BL: 4**.
+> **Worked example:** the SI lists 3 containers and 22,000 kg, the BL lists 4 containers and 22,000 kg. If everything else agrees, flag **only** the container count and show **SI: 3 / BL: 4**.
 
-### 1.5 The advanced stage (where teams can stand out)
+### 1.5 Where it gets hard: real-world inboxes
 
-| Advanced challenge | What changes |
-|--------------------|--------------|
-| **PDF and Word attachments** | Extract information from tables and different page layouts. |
-| **Scanned documents** | Image-only PDFs. Use OCR, a vision-capable LLM, or both. |
-| **Messier inputs** | Varied field labels, formatting differences, **misleading email subjects**, missing attachments. Tell a *real* discrepancy from a *reading or formatting* issue. |
-| **Reliability and human review** | When a document is unreadable, a value is missing, or the result is uncertain, send it for review **with source evidence and the reason**. A person confirms or corrects it and the report updates. Processing failures must be **visible** and **retryable**. |
+Classifying emails, pulling fields out of a plain-text file and comparing seven values is the easy part. Real inboxes are much messier, and that is where a system like this earns its keep:
 
-**Accuracy** means finding the right requests and the right discrepancies **without false alarms**. The data comes as JSON inbox records plus SI/BL attachments, and the organisers provide a local self-evaluation endpoint (`POST /submit`) that scores a submission without revealing the answer key.
+- **Documents that aren't plain text.** SIs and BLs arrive as PDFs, Word files and spreadsheets, with tables and layouts that differ from sender to sender.
+- **Scanned pages.** Some documents are just images of paper, so the text has to be read with OCR or a vision-capable model first.
+- **Untidy details.** Fields are labelled differently from one document to the next, formats vary, an email's subject line may have nothing to do with what it asks for, and an attachment may simply be missing. The system has to tell a *genuine* discrepancy apart from a reading or formatting quirk.
+- **Knowing when not to decide.** If a document is unreadable, a value is missing or the result is uncertain, the honest move is to hand the case to a person **with the source evidence and the reason**, let them confirm or correct it, and update the report. Processing failures need to be **visible** and **easy to retry**, never silent.
 
-### 1.6 How Shiptuationship maps to the brief
+Success is measured by finding the **right requests** and the **right discrepancies** without raising **false alarms**. The input is a set of JSON inbox records plus the SI and BL attachments they reference.
+
+### 1.6 How Shiptuationship answers it
 
 | Requirement | Our answer | Where |
 |-------------|------------|-------|
@@ -114,7 +114,7 @@ Shiptuationship has **two halves** that share one database:
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
 | **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison, "Mark as read", and a **Read Email** arrow to flip between the comparison and the original email. |
-| **User Log** | A Discord-style audit feed of every **moderator action** (reviews saved, emails marked read), with before/after field changes you can expand. |
+| **User Log** | A chronological audit feed of every **moderator action** (reviews saved, emails marked read), with before/after field changes you can expand. |
 | **System Log** | The same feed for everything the **n8n automation** did (classified, auto-compared). |
 | **Settings** | Five colour schemes: Light, Dark (true black), Ocean, Forest and Sunset. |
 | **Everywhere** | Fully responsive (drawer menu on phones, cards instead of tables), animated but respects *reduced motion*, refreshes from Firestore every 30 s. |
@@ -371,7 +371,7 @@ Three workflows are exported in [`n8n/`](n8n):
 
 ### 5.2 Classification
 
-A local LLM (`qwen3.5:9b`, "no-think" mode) returns **exactly one** JSON classification. The prompt is hardened for the "messier inputs" of the brief:
+A local LLM (`qwen3.5:9b`, "no-think" mode) returns **exactly one** JSON classification. The prompt is hardened for messy real-world inputs:
 
 - The email is treated as **untrusted data**. Instructions inside it are never followed (prompt-injection guard).
 - **Classify by the body, not the subject.** Subjects can be forwarded, re-used or misleading. The subject is only a tiebreaker.
@@ -433,7 +433,7 @@ Two separate pages, both read-only and built only from Firestore:
 | **User Log** (`/audit/user`) | `emails/*/activity` (a collection-group query) plus `moderators` for display names | Reviews saved (with expandable per-field before → after diffs) and marked-read events |
 | **System Log** (`/audit/system`) | `classified_at` and `comparison.performed_at` on each email | What the n8n automation did: classified as *X*, ran the SI/BL comparison with its result |
 
-Both have Discord-style dropdown filters (**Action** and **User**) whose choice lives in the URL (`?action=review_saved&user=Daniel%20Ho`), day dividers (Today / Yesterday / date), and refresh every 30 s.
+Both have dropdown filters (**Action** and **User**) whose choice lives in the URL (`?action=review_saved&user=Daniel%20Ho`), day dividers (Today / Yesterday / date), and refresh every 30 s.
 
 ### 5.6 Front-end engineering
 
@@ -497,11 +497,11 @@ Being honest about what this version does **not** do yet:
 ## 8. Future roadmap
 
 ### Near term (accuracy and reliability)
-- [ ] **OCR and vision-LLM fallback** for scanned and image-only PDFs (the brief's *Scanned documents* challenge).
+- [ ] **OCR and vision-LLM fallback** for scanned and image-only PDFs.
 - [ ] **One shared comparison module** used by both n8n and the web app, so the highlight and the pipeline can never disagree.
 - [ ] **Confidence scores and evidence:** store the source text snippet per extracted field and route *low-confidence* fields to review, not only mismatches.
 - [ ] **One-click retry** for failed queue rows from the UI, with the failure reason shown.
-- [ ] **Automated tests** for the comparison rules, the Firestore mapping and the API routes, plus a self-evaluation script that posts to the organisers' `/submit` endpoint.
+- [ ] **Automated tests** for the comparison rules, the Firestore mapping and the API routes, plus an accuracy check that runs a labelled set of sample emails through the whole pipeline.
 
 ### Medium term (product)
 - [ ] **Real authentication and roles** (moderator, viewer, admin) so the audit logs show real people.
@@ -544,7 +544,6 @@ Being honest about what this version does **not** do yet:
 │  └─ ports.ts · top.ts · …    Port → country mapping, top-N, hooks
 ├─ n8n/                        ingestion.json · ingestion-trigger.json · ingestion-drain.json
 ├─ public/shiplogo.svg         Logo (vectorised)
-├─ Averis_Hackathon_2026_Problem_Statement.pdf
 ├─ .env.example                Environment template
 └─ README.md
 ```
