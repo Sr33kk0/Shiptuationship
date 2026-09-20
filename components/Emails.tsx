@@ -7,6 +7,7 @@ import { CATS, dayKey, fmtDate, fmtTime, type Category, type Fields, type Shipme
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
 import { Icon } from "./Icon";
+import Profile from "./Profile";
 import ReviewModal from "./ReviewModal";
 import SortSheet from "./SortSheet";
 import { useToast } from "./Shell";
@@ -123,6 +124,7 @@ export default function Emails() {
           <h1>Emails</h1>
           <p>Incoming email queue with category filters, search, and review.</p>
         </div>
+        <Profile />
       </header>
 
       <section className="queue fade-up" style={{ "--d": "0.12s" } as React.CSSProperties}>
@@ -193,7 +195,6 @@ export default function Emails() {
                     </th>
                   );
                 })}
-                <th className="action">Action</th>
               </tr>
             </thead>
             {/* keyed by tab so switching tabs replays the cascade; re-sorting replays it too (moved rows are re-inserted), typing and the 30s refresh do not */}
@@ -202,7 +203,7 @@ export default function Emails() {
                 rows.length === 0 &&
                 Array.from({ length: 8 }, (_, i) => (
                   <tr key={`sk${i}`} className="skel-row" aria-hidden="true" style={{ "--d": `${i * 0.04}s` } as React.CSSProperties}>
-                    {[56, 230, 170, 100, 80, 120, 84, 52].map((w, j) => (
+                    {[56, 230, 170, 100, 80, 120, 84].map((w, j) => (
                       <td key={j}>
                         <span className="skel" style={{ width: w }} />
                       </td>
@@ -211,7 +212,7 @@ export default function Emails() {
                 ))}
               {rows.length === 0 && loadState !== "loading" && (
                 <tr className="empty">
-                  <td colSpan={8}>
+                  <td colSpan={7}>
                     {loadState === "error" ? "Could not load shipments from Firestore." : "No shipments match your filter criteria."}
                   </td>
                 </tr>
@@ -219,8 +220,23 @@ export default function Emails() {
               {rows.map((s, i) => {
                 const cat = CATS[s.category];
                 return (
-                  <tr key={s.id} onClick={() => setOpenId(s.id)} style={{ "--d": `${i * 0.04}s` } as React.CSSProperties}>
-                    <td className="id">{s.id}</td>
+                  <tr
+                    key={s.id}
+                    className={s.isRead ? "read" : "unread"}
+                    tabIndex={0}
+                    onClick={() => setOpenId(s.id)}
+                    onKeyDown={(e) => {
+                      if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        setOpenId(s.id);
+                      }
+                    }}
+                    style={{ "--d": `${i * 0.04}s` } as React.CSSProperties}
+                  >
+                    <td className="id">
+                      <span className={`rs${s.isRead ? "" : " on"}`} role="img" aria-label={s.isRead ? "Read" : "Unread"} title={s.isRead ? "Read" : "Unread"} />
+                      {s.id}
+                    </td>
                     <td className="subject">
                       <span title={s.subject}>{s.subject}</span>
                     </td>
@@ -259,18 +275,6 @@ export default function Emails() {
                         </span>
                       )}
                       {s.status === "pending" && <span className="muted">Received</span>}
-                      {s.isRead && <span className="muted"> · Read</span>}
-                    </td>
-                    <td className="action">
-                      <button
-                        className="row-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenId(s.id);
-                        }}
-                      >
-                        {s.category === "document-comparison" ? "Inspect" : "Read"}
-                      </button>
                     </td>
                   </tr>
                 );
