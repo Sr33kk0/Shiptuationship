@@ -12,7 +12,7 @@ export interface FilterOption {
   color?: string; // dot colour
 }
 
-// A "Filter by ..." dropdown like Discord's audit log. Every option is a real link, so the choice lives in the address bar.
+// A "Filter by ..." dropdown for the audit logs. Every option is a real link, so the choice lives in the address bar.
 export default function FilterMenu({ title, value, options }: { title: string; value: string; options: FilterOption[] }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
