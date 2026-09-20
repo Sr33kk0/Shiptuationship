@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [atTop, setAtTop] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timer = useRef<number>(undefined);
 
@@ -67,7 +69,7 @@ export default function Dashboard() {
         if (!res.ok) throw new Error(await res.text());
         const data: Shipment[] = await res.json();
         if (!alive) return;
-        setShipments(data);
+        if (!savingRef.current) setShipments(data);
         setLoadState("ready");
       } catch {
         if (alive) setLoadState((s) => (s === "ready" ? s : "error"));
@@ -119,9 +121,12 @@ export default function Dashboard() {
   const selected = shipments.find((s) => s.id === openId) ?? null;
 
   // Server runs the deterministic 7-field comparison and returns the updated shipment.
-  const save = async (s: Shipment, fields: Fields) => {
+  const save = async (s: Shipment, fields?: Fields) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
-      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/review`, {
+      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${fields ? "review" : "read"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fields }),
@@ -129,9 +134,12 @@ export default function Dashboard() {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
       const updated: Shipment = await res.json();
       setShipments((all) => all.map((x) => (x.id === s.id ? updated : x)));
-      showToast(`Saved verified fields for ${s.id}`);
+      showToast(fields ? `Saved verified fields for ${s.id}` : `Marked ${s.id} as read`);
     } catch (e) {
       showToast(`Save failed: ${(e as Error).message}`);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -205,7 +213,7 @@ export default function Dashboard() {
           {!collapsed && (
             <div style={{ minWidth: 0 }}>
               <h4 className="trunc">Daniel Ho</h4>
-              <small className="trunc">Verification Officer</small>
+              <small className="trunc">Moderator · DanielHo</small>
             </div>
           )}
         </div>
@@ -384,6 +392,7 @@ export default function Dashboard() {
                             </span>
                           )}
                           {s.status === "pending" && <span className="muted">Received</span>}
+                          {s.isRead && <span className="muted"> · Read</span>}
                         </td>
                         <td className="action">
                           <button
@@ -410,12 +419,10 @@ export default function Dashboard() {
         <ReviewModal
           key={selected.id}
           shipment={selected}
+          saving={saving}
           onClose={() => setOpenId(null)}
           onSave={(fields) => save(selected, fields)}
-          onDone={() => {
-            showToast(`Marked ${selected.id} as completed.`);
-            setOpenId(null);
-          }}
+          onMarkRead={() => save(selected)}
           onToast={showToast}
         />
       )}

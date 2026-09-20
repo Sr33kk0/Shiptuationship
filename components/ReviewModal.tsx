@@ -87,13 +87,16 @@ function Attachments({ names, heading }: { names: string[]; heading: string }) {
 
 interface Props {
   shipment: Shipment;
+  saving: boolean;
   onClose: () => void;
   onSave: (fields: Fields) => void;
-  onDone: () => void;
+  onMarkRead: () => void;
   onToast: (msg: string) => void;
 }
 
-export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onToast }: Props) {
+const actionTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "medium" }) + " MYT";
+
+export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast }: Props) {
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
   const [pane, setPane] = useState<Pane>("preview");
@@ -128,9 +131,12 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
               <small>
                 {s.sender} • {s.date}
               </small>
+              {s.reviewedAt && <div><small>Reviewed by {s.reviewedBy || "Unknown reviewer"} · {actionTime(s.reviewedAt)}</small></div>}
+              {s.markedReadAt && <div><small>Marked as read by {s.markedReadBy || "Unknown reviewer"} · {actionTime(s.markedReadAt)}</small></div>}
             </div>
           </div>
           <div className="modal-actions">
+            {isCmp && <button className="btn ghost" disabled={saving || s.isRead} onClick={onMarkRead}>{s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}</button>}
             {isCmp && (
               <Seg
                 value={pane}
@@ -184,7 +190,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                               </span>
                             )}
                           </div>
-                          <input id={`f-${f.key}`} type="text" className={off ? "bad" : ""} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
+                          <input id={`f-${f.key}`} type="text" disabled={saving} className={off ? "bad" : ""} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
                         </div>
                       );
                     })}
@@ -192,6 +198,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                   <div className="form-foot">
                     <button
                       className="btn ghost"
+                      disabled={saving}
                       onClick={() => {
                         setForm(s.extractedFields!);
                         onToast("Reset fields back to carrier's draft values");
@@ -200,9 +207,9 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                       <Icon d="refresh" size={14} sw={2} />
                       Reset
                     </button>
-                    <button className="btn dark grow" onClick={() => onSave(form)}>
+                    <button className="btn dark grow" disabled={saving} onClick={() => onSave(form)}>
                       <Icon d="check" size={14} sw={2.2} />
-                      Save Changes
+                      {saving ? "Saving…" : "Save Review"}
                     </button>
                   </div>
                 </div>
@@ -271,8 +278,8 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
               <button className="btn ghost lg" onClick={onClose}>
                 Close
               </button>
-              <button className="btn dark lg" onClick={onDone}>
-                Mark as Done
+              <button className="btn dark lg" disabled={saving || s.isRead} onClick={onMarkRead}>
+                {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
               </button>
             </div>
           </div>

@@ -20,6 +20,19 @@ Next.js route handlers (`app/api/emails`) read/write Firestore over REST using a
 5. `npm run dev` → `GET /api/emails` returns the `emails` collection mapped to the dashboard shape; `POST /api/emails/{id}/review` saves a manual override (`review`, `status`, `human_review_required`).
 
 ---
+## Moderator actions
+
+The app automatically uses the preset moderator `DanielHo`; there is no login screen. Everyone using this temporary setup is attributed to this identity.
+
+- The first successful review or mark-read action creates `moderators/DanielHo` if missing. No manual Firestore setup is needed beyond the existing Google credentials above.
+- `POST /api/emails/{id}/review` stores verified fields, `review.reviewed_by`, and `review.reviewed_at`.
+- `POST /api/emails/{id}/read` stores `read_status.is_read`, `marked_by`, and `marked_at`, independently of comparison status. Repeated mark-read calls do not add duplicate events.
+- Each action creates an `emails/{id}/activity/{eventId}` document with `moderator_id`, `action`, `occurred_at`, and before/after values. Review events include changed field values. History is available in Firestore; the dashboard displays the latest reviewer/read metadata.
+- Email changes and activity entries use one atomic Firestore commit with database timestamps. Concurrent database changes reject the save; refresh and retry. The UI displays timestamps in Malaysia time.
+- Existing records without attribution remain unknown; they are not retroactively assigned to DanielHo. n8n can still update comparison status during re-ingestion; moderator metadata and activity history remain separate.
+
+Verification: `npx tsc --noEmit`, `npm run build`, and `node tests/moderator.cjs` (Node 24, mocked Firestore, no database writes).
+
 ## Ingestion pipeline (n8n)
 
 Three workflows in `n8n/`. Import all three; in `ingestion-drain` re-select the `ingestion` workflow in the **Ingest Email** node (the export does not carry the workflow id). Activate `ingestion-trigger` and `ingestion-drain`.

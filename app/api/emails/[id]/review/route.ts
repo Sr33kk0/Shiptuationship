@@ -1,5 +1,5 @@
-import { getEmail, saveReview } from "@/lib/firestore";
-import { FIELDS, mismatches, type Fields } from "@/lib/shipments";
+import { saveModeratorAction } from "@/lib/firestore";
+import { FIELDS, type Fields } from "@/lib/shipments";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +22,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   try {
-    const current = await getEmail(id);
-    if (!current) return bad("Email not found", 404);
-    if (!current.referenceFields) return bad("No Shipping Instruction extracted for this email yet", 409);
-    const flagged = mismatches(fields, current.referenceFields).length > 0;
-    return Response.json(await saveReview(id, fields, flagged));
+    return Response.json(await saveModeratorAction(id, fields));
   } catch (e) {
-    return bad((e as Error).message, 502);
+    const status = (e as { status?: number }).status;
+    return bad(status === 404 || status === 409 ? (e as Error).message : "Could not save review. Please try again.", status === 404 || status === 409 ? status : 502);
   }
 }

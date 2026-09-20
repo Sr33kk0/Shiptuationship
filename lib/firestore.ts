@@ -1,6 +1,6 @@
 // Server-only: Firestore REST access with a Google OAuth2 refresh token (same model as the n8n credential).
 // Never import this from a client component.
-import { FIELDS, FIRESTORE_KEYS, type Category, type FieldKey, type Fields, type Shipment, type Status } from "./shipments";
+import { FIELDS, FIRESTORE_KEYS, mismatches, type Category, type FieldKey, type Fields, type Shipment, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -34,7 +34,7 @@ async function getAccessToken(): Promise<string> {
 // ---- REST helpers ---------------------------------------------------------
 
 async function fs(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${BASE}/${path}`, {
+  const res = await fetch(`${BASE}${path.startsWith(":") ? "" : "/"}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${await getAccessToken()}`, "Content-Type": "application/json", ...init.headers },
     cache: "no-store",
@@ -44,11 +44,6 @@ async function fs(path: string, init: RequestInit = {}) {
 }
 
 const fsGet = (path: string) => fs(path);
-
-function fsPatch(path: string, fields: Record<string, unknown>) {
-  const mask = Object.keys(fields).map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join("&");
-  return fs(`${path}?${mask}`, { method: "PATCH", body: JSON.stringify({ fields: encodeMap(fields) }) });
-}
 
 // ---- Firestore value <-> JS -----------------------------------------------
 
@@ -114,6 +109,7 @@ export function toShipment(doc: Doc): Shipment {
   const date = Number.isNaN(ts) ? received : new Date(ts).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
   const review = doc.review as Doc | undefined;
+  const read = doc.read_status as Doc | undefined;
   const comparison = (doc.comparison as Doc | undefined) ?? {};
   const cmpFields = (comparison.fields as Record<string, Doc> | undefined) ?? {};
   const byFsKey = Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], f])) as Record<string, (typeof FIELDS)[number]>;
@@ -132,7 +128,8 @@ export function toShipment(doc: Doc): Shipment {
   const trail: { at: string; action: string }[] = [];
   if (doc.classified_at) trail.push({ at: str(doc.classified_at), action: `Classified as ${str(doc.classification)}` });
   if (comparison.performed_at) trail.push({ at: str(comparison.performed_at), action: `Auto-comparison: ${str(comparison.status)}` });
-  if (review?.reviewed_at) trail.push({ at: str(review.reviewed_at), action: `Manual verification saved (${status === "clean" ? "all matched & cleared" : "override flagged"})` });
+  if (review?.reviewed_at) trail.push({ at: str(review.reviewed_at), action: `Manual verification saved by ${str(review.reviewed_by) || "unknown reviewer"}` });
+  if (read?.marked_at) trail.push({ at: str(read.marked_at), action: `Marked as read by ${str(read.marked_by) || "unknown reviewer"}` });
   trail.sort((a, b) => a.at.localeCompare(b.at));
 
   return {
@@ -144,6 +141,11 @@ export function toShipment(doc: Doc): Shipment {
     date,
     rawDate,
     status,
+    reviewedBy: str(review?.reviewed_by),
+    reviewedAt: str(review?.reviewed_at),
+    isRead: read?.is_read === true,
+    markedReadBy: str(read?.marked_by),
+    markedReadAt: str(read?.marked_at),
     attachmentCount: attachments.length,
     attachmentNames: attachments,
     emailBody: str(doc.body),
@@ -174,11 +176,73 @@ export async function getEmail(id: string): Promise<Shipment | null> {
   }
 }
 
-export async function saveReview(id: string, fields: Fields, flagged: boolean): Promise<Shipment> {
-  await fsPatch(`emails/${encodeURIComponent(id)}`, {
-    review: { reviewed_at: new Date(), fields: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
+// Preset demo identity: everyone using this app acts as DanielHo.
+const MODERATOR = "DanielHo";
+const requestTime = (fieldPath: string) => ({ fieldPath, setToServerValue: "REQUEST_TIME" });
+const actionError = (message: string, status: number) => Object.assign(new Error(message), { status });
+
+export async function saveModeratorAction(id: string, fields?: Fields): Promise<Shipment> {
+  const path = `emails/${encodeURIComponent(id)}`;
+  let snapshot: { name: string; fields?: Record<string, FsValue>; updateTime: string };
+  try {
+    snapshot = await fsGet(path);
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) throw actionError("Email not found", 404);
+    throw e;
+  }
+  const before = decodeMap(snapshot.fields ?? {});
+  const current = toShipment(before);
+  if (!fields && current.isRead) return current;
+  if (fields && (current.category !== "document-comparison" || !current.referenceFields)) {
+    throw actionError("No Shipping Instruction comparison available for this email", 409);
+  }
+  const flagged = fields ? mismatches(fields, current.referenceFields!).length > 0 : false;
+  const updates: Doc = fields ? {
+    review: { reviewed_by: MODERATOR, fields: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
     status: flagged ? "flagged" : "cleared",
     human_review_required: flagged,
+  } : { read_status: { is_read: true, marked_by: MODERATOR } };
+  const timeField = fields ? "review.reviewed_at" : "read_status.marked_at";
+  const changes: Doc = fields ? Object.fromEntries(FIELDS
+    .filter((f) => current.extractedFields?.[f.key] !== fields[f.key])
+    .map((f) => [FIRESTORE_KEYS[f.key], { before: current.extractedFields?.[f.key] ?? null, after: fields[f.key] }])) : {};
+  const writes: unknown[] = [];
+  const moderatorName = `${BASE.slice("https://firestore.googleapis.com/v1/".length)}/moderators/${MODERATOR}`;
+  try {
+    await fsGet(`moderators/${MODERATOR}`);
+  } catch (e) {
+    if ((e as { status?: number }).status !== 404) throw e;
+    writes.push({
+      update: { name: moderatorName, fields: encodeMap({ display_name: "Daniel Ho", role: "moderator" }) },
+      currentDocument: { exists: false },
+      updateTransforms: [requestTime("created_at")],
+    });
+  }
+  writes.push({
+    update: { name: snapshot.name, fields: encodeMap(updates) },
+    updateMask: { fieldPaths: Object.keys(updates) },
+    currentDocument: { updateTime: snapshot.updateTime },
+    updateTransforms: [requestTime(timeField)],
+  }, {
+    update: { name: `${snapshot.name}/activity/${crypto.randomUUID()}`, fields: encodeMap({
+      moderator_id: MODERATOR,
+      action: fields ? "review_saved" : "marked_read",
+      changes,
+      before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null } : { read_status: before.read_status ?? null },
+      after: updates,
+    }) },
+    currentDocument: { exists: false },
+    updateTransforms: [requestTime("occurred_at")],
   });
-  return (await getEmail(id))!;
+  try {
+    const result = await fs(":commit", { method: "POST", body: JSON.stringify({ writes }) });
+    const map = updates[fields ? "review" : "read_status"] as Doc;
+    map[fields ? "reviewed_at" : "marked_at"] = result.writeResults[writes.length - 2].transformResults[0].timestampValue;
+    return toShipment({ ...before, ...updates });
+  } catch (e) {
+    if ((e as { status?: number }).status === 409 || ((e as Error).message.includes("FAILED_PRECONDITION"))) {
+      throw actionError("The record changed while saving. Refresh and try again.", 409);
+    }
+    throw e;
+  }
 }
