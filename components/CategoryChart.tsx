@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { CATS, type Category, type Shipment } from "@/lib/shipments";
 import CountUp from "./CountUp";
+import { Icon } from "./Icon";
 import { useNavigate } from "./Shell";
 
 // Lighter, brighter versions of the CATS colours; chart only, table tags keep CATS.
-const COLORS: Record<Category, string> = {
+export const COLORS: Record<Category, string> = {
   "document-comparison": "#60a5fa",
   "new-si": "#c084fc",
   invoice: "#fbbf24",
@@ -56,6 +57,7 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
 
   // The ring draws itself clockwise once the data is there. If the panel is still fading in (arriving from another page) wait for it.
   const hasRows = rows.length > 0;
+  const selectedRow = rows.find((c) => c.key === selected);
   if (hasRows && sweepDelay.current === null) sweepDelay.current = Math.max(0.1, 0.75 - (performance.now() - mountedAt.current) / 1000);
   useEffect(() => {
     if (!hasRows) return;
@@ -91,6 +93,17 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
   return (
     <section className="panel fade-up" style={{ "--d": "0.5s" } as React.CSSProperties}>
       <h3 className="card-title">Emails by Category</h3>
+      {/* the slices open their emails on a second click; nothing else on the chart says so */}
+      <p className="chart-hint" aria-live="polite">
+        {selectedRow ? (
+          <>
+            Click <b>{selectedRow.label}</b> again to view its emails
+            <Icon d="chevR" size={14} sw={2.4} />
+          </>
+        ) : (
+          "Click a slice to highlight it, then click it again to view those emails"
+        )}
+      </p>
       <div className="chart-body">
         <ul className="legend">
           {loading &&
