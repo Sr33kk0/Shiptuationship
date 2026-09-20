@@ -60,7 +60,7 @@ export default function Dashboard() {
       <header className="page-head fade-up">
         <div>
           <h1>Dashboard Overview</h1>
-          <p>Ocean document intake, automated cross-verification, and discrepancy desk.</p>
+          <p>Email intake, automated SI and BL cross-verification, and discrepancy review.</p>
         </div>
         <Profile />
       </header>

@@ -11,6 +11,7 @@ export const PATH = {
   x: "M6 18L18 6M6 6l12 12",
   menu: "M4 6h16M4 12h16M4 18h16",
   chevR: "M9 5l7 7-7 7",
+  chevL: "M15 19l-7-7 7-7",
   chevD: "M19 9l-7 7-7-7",
   collapse: "M11 19l-7-7 7-7M19 19l-7-7 7-7",
   expand: "M13 5l7 7-7 7M5 5l7 7-7 7",
