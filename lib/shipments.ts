@@ -1,4 +1,5 @@
 export type Category = "document-comparison" | "new-si" | "invoice" | "general" | "other";
+export type Side = "si" | "bl"; // which document a manual edit applies to
 export type Status = "discrepancy" | "clean" | "pending";
 
 // The 7 manifest fields compared between the customer SI and the carrier's draft BL.
