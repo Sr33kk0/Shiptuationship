@@ -27,8 +27,8 @@ const COLS: [SortKey, string][] = [
 ];
 
 // c = idle text colour, a = active background
-const FILTERS: { key: Filter; label: string; c: string; a: string }[] = [
-  { key: "all", label: "All", c: "#737373", a: "#0f172a" },
+const FILTERS: { key: Filter; label: string; c: string; a: string; t?: string }[] = [
+  { key: "all", label: "All", c: "var(--muted)", a: "var(--solid)", t: "var(--on-solid)" },
   { key: "document-comparison", label: "Comparisons", c: "#1d4ed8", a: "#2563eb" },
   { key: "new-si", label: "SI Requests", c: "#7e22ce", a: "#9333ea" },
   { key: "invoice", label: "Invoices", c: "#b45309", a: "#d97706" },
@@ -37,7 +37,7 @@ const FILTERS: { key: Filter; label: string; c: string; a: string }[] = [
 ];
 
 const SUBS: { key: Sub; c: string; a: string; t: string }[] = [
-  { key: "all", c: "#737373", a: "#e5e5e5", t: "#0f172a" },
+  { key: "all", c: "var(--muted)", a: "var(--edge)", t: "var(--ink)" },
   { key: "needs-review", c: "#e11d48", a: "#ffe4e6", t: "#9f1239" },
   { key: "validated", c: "#059669", a: "#d1fae5", t: "#065f46" },
 ];
@@ -145,7 +145,7 @@ export default function Emails() {
 
           <div className="filters">
             {FILTERS.map((f) => (
-              <Link key={f.key} href={href(f.key)} replace scroll={false} className="filter" aria-current={filter === f.key ? "page" : undefined} style={{ "--c": f.c, "--a": f.a } as React.CSSProperties}>
+              <Link key={f.key} href={href(f.key)} replace scroll={false} className="filter" aria-current={filter === f.key ? "page" : undefined} style={{ "--c": f.c, "--a": f.a, "--t": f.t } as React.CSSProperties}>
                 {f.label}
                 {loadState !== "loading" && ` (${count(f.key)})`}
                 {f.key === "document-comparison" && needsReview > 0 && <span className="dot" />}

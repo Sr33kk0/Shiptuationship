@@ -78,11 +78,11 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
       <path d={sector(c.a0, c.a1, HOLE, HOLE + BAND)} fill="#000" opacity={0.1} />
       {c.popped && (
         <g className="slice-badge" transform={`translate(${pt((OUT + HOLE) / 2, c.mid)})`}>
-          <rect x={-badgeW(c.label) / 2} y={-22} width={badgeW(c.label)} height={44} rx={10} fill="#0f172a" />
-          <text y={-9} textAnchor="middle" dominantBaseline="central" fill="#cbd5e1" fontSize={10.5} fontWeight={600}>
+          <rect x={-badgeW(c.label) / 2} y={-22} width={badgeW(c.label)} height={44} rx={10} style={{ fill: "var(--solid)" }} />
+          <text y={-9} textAnchor="middle" dominantBaseline="central" style={{ fill: "var(--on-solid-2)" }} fontSize={10.5} fontWeight={600}>
             {c.label}
           </text>
-          <text y={8} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={16} fontWeight={800}>
+          <text y={8} textAnchor="middle" dominantBaseline="central" style={{ fill: "var(--on-solid)" }} fontSize={16} fontWeight={800}>
             {c.pct >= 1 ? Math.round(c.pct) : "<1"}%
           </text>
         </g>
@@ -147,7 +147,7 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
               </defs>
             )}
             {/* the grey track is the loading placeholder, and stays behind the ring while it draws in */}
-            {(!hasRows || intro) && <circle className={loading ? "breathe" : undefined} cx={MID} cy={MID} r={(OUT + HOLE) / 2} fill="none" stroke="#e5e5e5" strokeWidth={OUT - HOLE} />}
+            {(!hasRows || intro) && <circle className={loading ? "breathe" : undefined} cx={MID} cy={MID} r={(OUT + HOLE) / 2} fill="none" style={{ stroke: "var(--edge)" }} strokeWidth={OUT - HOLE} />}
             <g mask={intro && hasRows ? "url(#donut-reveal)" : undefined}>
               {rows.filter((c) => !c.popped).map(segment)}
               {rows.filter((c) => c.popped).map(segment)}
