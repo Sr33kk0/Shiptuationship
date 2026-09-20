@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CATS, FIELDS, mismatches, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { useEffect, useRef, useState } from "react";
+import { CATS, FIELDS, fmtWhen, mismatches, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { Icon } from "./Icon";
 
 type Pane = "preview" | "email";
@@ -74,8 +74,8 @@ function Attachments({ names, heading }: { names: string[]; heading: string }) {
     <div className="attach">
       <span className="k">{heading}</span>
       <div className="chips">
-        {names.map((n) => (
-          <div key={n} className="chip">
+        {names.map((n, i) => (
+          <div key={n} className="chip" style={{ "--i": i } as React.CSSProperties}>
             <Icon d="doc" />
             <span>{n}</span>
           </div>
@@ -102,8 +102,23 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
   const [formOpen, setFormOpen] = useState(true);
   const cat = CATS[s.category];
 
+  // Every way out (X, Escape, Close, Mark as Done) plays the exit first, then hands over to the parent, which unmounts the modal.
+  const [closing, setClosing] = useState(false);
+  const leaving = useRef(false);
+  const exitTimer = useRef<number>(undefined);
+  useEffect(() => () => clearTimeout(exitTimer.current), []);
+  const leave = (then: () => void) => {
+    if (leaving.current) return; // already on its way out (a second click or key press)
+    leaving.current = true;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return then();
+    setClosing(true);
+    exitTimer.current = window.setTimeout(then, 200); // keep in step with the 0.2s exit in globals.css
+  };
+  const close = () => leave(onClose);
+  const done = () => leave(onDone);
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && leave(onClose);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -123,7 +138,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
   const bad = si && bl ? mismatches(si, bl) : [];
 
   return (
-    <div className="overlay">
+    <div className={`overlay${closing ? " closing" : ""}`}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={`${isCmp ? "Manifest Inspection" : "Email Transmission"} ${s.id}`}>
         <div className="modal-head">
           <div className="modal-title">
@@ -138,7 +153,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                 </span>
               </div>
               <small>
-                {s.sender} • {s.date}
+                {s.sender} • {fmtWhen(s)}
               </small>
             </div>
           </div>
@@ -153,7 +168,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                 ]}
               />
             )}
-            <button className="close" onClick={onClose} aria-label="Close">
+            <button className="close" onClick={close} aria-label="Close">
               <Icon d="x" sw={2} />
             </button>
           </div>
@@ -251,8 +266,9 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                       />
                     </div>
                     <div className="docs">
-                      {docView !== "bl" && <Paper kind="si" refNo={s.siRef} values={si} bad={side === "si" ? bad : []} />}
-                      {docView !== "si" && <Paper kind="bl" refNo={s.blRef} values={bl} bad={bad} />}
+                      {/* keyed by the view, so each switch re-creates the papers and they fade in again (typing in the form does not) */}
+                      {docView !== "bl" && <Paper key={`si-${docView}`} kind="si" refNo={s.siRef} values={si} bad={side === "si" ? bad : []} />}
+                      {docView !== "si" && <Paper key={`bl-${docView}`} kind="bl" refNo={s.blRef} values={bl} bad={bad} />}
                     </div>
                   </>
                 ) : (
@@ -262,7 +278,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                         <h4>{s.subject}</h4>
                         <div className="email-meta">
                           <span>From: {s.sender}</span>
-                          <span>Date: {s.date}</span>
+                          <span>Date: {fmtWhen(s)}</span>
                         </div>
                       </div>
                       <div className="email-body">{s.emailBody}</div>
@@ -280,7 +296,7 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
                 <span className="tag" style={{ color: cat.color, background: cat.bg }}>
                   {cat.label}
                 </span>
-                <span className="muted">{s.date}</span>
+                <span className="muted">{fmtWhen(s)}</span>
               </div>
               <div>
                 <h2>{s.subject}</h2>
@@ -292,10 +308,10 @@ export default function ReviewModal({ shipment: s, onClose, onSave, onDone, onTo
               <Attachments names={s.attachmentNames} heading="Attached Files" />
             </div>
             <div className="plain-foot">
-              <button className="btn ghost lg" onClick={onClose}>
+              <button className="btn ghost lg" onClick={close}>
                 Close
               </button>
-              <button className="btn dark lg" onClick={onDone}>
+              <button className="btn dark lg" onClick={done}>
                 Mark as Done
               </button>
             </div>

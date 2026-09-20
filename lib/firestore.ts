@@ -109,10 +109,16 @@ export function toShipment(doc: Doc): Shipment {
   const sender = m ? m[2] : from;
   const senderName = m && m[1] ? m[1].replace(/^"|"$/g, "") : sender;
 
-  const received = str(doc.received_at);
-  const ts = Date.parse(received);
-  const rawDate = Number.isNaN(ts) ? received : new Date(ts).toISOString().slice(0, 10);
-  const date = Number.isNaN(ts) ? received : new Date(ts).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  // An email's date is when n8n classified it (`classified_at`, a Firestore timestamp). `received_at` is kept only as a fallback:
+  // it is an empty string on every document today.
+  const stamped = str(doc.classified_at) || str(doc.received_at);
+  const ts = Date.parse(stamped);
+  const when = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const at = Number.isNaN(ts) ? "" : when.toISOString(); // full timestamp, for sorting by time within a day
+  // `rawDate` (the filter key) and `date` (the label) are built from the same local calendar day, so the date filter always agrees with the table.
+  const rawDate = Number.isNaN(ts) ? stamped : `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}`;
+  const date = Number.isNaN(ts) ? stamped : when.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
   const review = doc.review as Doc | undefined;
   const comparison = (doc.comparison as Doc | undefined) ?? {};
@@ -147,6 +153,7 @@ export function toShipment(doc: Doc): Shipment {
     category: CATEGORY[str(doc.classification)] ?? "other",
     date,
     rawDate,
+    at,
     status,
     attachmentCount: attachments.length,
     attachmentNames: attachments,
