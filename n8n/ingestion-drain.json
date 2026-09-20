@@ -1,0 +1,509 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Every Minute"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents:runQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"structuredQuery\": {\"from\": [{\"collectionId\": \"ingestion_queue\"}], \"where\": {\"fieldFilter\": {\"field\": {\"fieldPath\": \"status\"}, \"op\": \"EQUAL\", \"value\": {\"stringValue\": \"processing\"}}}}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "b1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Processing Rows",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "All rows currently 'processing'. Fresh one = another drain is running."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Only one drain may run at a time. A row in 'processing' claimed less than STALE minutes ago\n// means another drain execution is mid-email -> stop here. Older 'processing' rows are leftovers\n// from a crashed drain -> hand them to Requeue Stale.\n// ponytail: ~100ms window between one email finishing and the next claim where two drains could\n// both pass; claim precondition still prevents double-processing, only memory doubles briefly.\nconst STALE_MS = 15 * 60 * 1000;\nconst rows = $input.all().map(i => i.json.document).filter(d => d?.name);\nconst now = Date.now();\nconst fresh = rows.filter(d => now - Date.parse(d.fields?.claimed_at?.timestampValue ?? 0) < STALE_MS);\nif (fresh.length) return [];\nreturn [{ json: { stale: rows.map(d => d.name) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        0
+      ],
+      "id": "b1b2c3d4-0011-4000-8000-000000000011",
+      "name": "Gate"
+    },
+    {
+      "parameters": {
+        "jsCode": "return ($input.first().json.stale ?? []).map(name => ({ json: {\n  queue_doc: name,\n  firestore_document: { fields: {\n    status: { stringValue: 'queued' },\n    last_error: { stringValue: 'requeued: previous drain crashed' },\n  } },\n} }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        256
+      ],
+      "id": "b1b2c3d4-0012-4000-8000-000000000012",
+      "name": "Stale Rows"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://firestore.googleapis.com/v1/' + $json.queue_doc + '?' + Object.keys($json.firestore_document.fields).map(field => 'updateMask.fieldPaths=' + encodeURIComponent(field)).join('&') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.firestore_document }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        256
+      ],
+      "id": "b1b2c3d4-0013-4000-8000-000000000013",
+      "name": "Requeue Stale",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "Rows left in 'processing' by a crashed drain go back to 'queued'."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents:runQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"structuredQuery\": {\"from\": [{\"collectionId\": \"ingestion_queue\"}], \"where\": {\"fieldFilter\": {\"field\": {\"fieldPath\": \"status\"}, \"op\": \"EQUAL\", \"value\": {\"stringValue\": \"queued\"}}}, \"orderBy\": [{\"field\": {\"fieldPath\": \"__name__\"}, \"direction\": \"ASCENDING\"}], \"limit\": 20}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        0
+      ],
+      "id": "b1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Next 20 Queued",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "status == queued, ordered by document name (= Drive createdTime + file id), limit 20. Equality + __name__ order needs no composite index."
+    },
+    {
+      "parameters": {
+        "jsCode": "// runQuery returns one item per row (plus a bare {readTime} when empty). Keep real rows only.\nreturn $input.all()\n  .filter(item => item.json.document?.name)\n  .map(item => ({ json: { doc_name: item.json.document.name, update_time: item.json.document.updateTime } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "b1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Pick Rows"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1504,
+        0
+      ],
+      "id": "b1b2c3d4-0014-4000-8000-000000000014",
+      "name": "One At A Time",
+      "notesInFlow": true,
+      "notes": "Claim -> ingest -> mark, one row per iteration, so 'processing' never holds more than the email in flight."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return { json: { ...$json, firestore_document: { fields: {\n  status: { stringValue: 'processing' },\n  claimed_at: { timestampValue: new Date().toISOString() },\n} } } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        0
+      ],
+      "id": "b1b2c3d4-0015-4000-8000-000000000015",
+      "name": "Claim Body"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://firestore.googleapis.com/v1/' + $json.doc_name + '?updateMask.fieldPaths=status&updateMask.fieldPaths=claimed_at&currentDocument.updateTime=' + encodeURIComponent($json.update_time) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.firestore_document }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2112,
+        0
+      ],
+      "id": "b1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Claim",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Atomic claim: precondition on updateTime. If another run claimed it first, Firestore returns 400 FAILED_PRECONDITION -> error output -> skip to next row."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Claim succeeded -> shape the item exactly as the ingestion sub-workflow expects ($json.id, $json.name).\nconst f = $json.fields ?? {};\nreturn { json: { id: f.file_id?.stringValue, name: f.name?.stringValue ?? '', queue_doc: $json.name } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        0
+      ],
+      "id": "b1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Claim Item"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "cN1tKoIGLq54Mve-UibmY",
+          "cachedResultName": "ingestion"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        2704,
+        0
+      ],
+      "id": "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d",
+      "name": "Ingest Email",
+      "notesInFlow": true,
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput",
+      "notes": "One email per iteration. Always Output Data: an email with no attachments ends 'ingestion' with 0 items; without this Mark Done would never run and the loop would stall."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return { json: {\n  queue_doc: $('Claim Item').first().json.queue_doc,\n  firestore_document: { fields: {\n    status: { stringValue: 'done' },\n    finished_at: { timestampValue: new Date().toISOString() },\n  } },\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3008,
+        -96
+      ],
+      "id": "b1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Mark Done"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const message = String($json.error?.message ?? $json.error ?? 'ingestion failed').slice(0, 2000);\nreturn { json: {\n  queue_doc: $('Claim Item').first().json.queue_doc,\n  firestore_document: { fields: {\n    status: { stringValue: 'failed' },\n    finished_at: { timestampValue: new Date().toISOString() },\n    last_error: { stringValue: message },\n  } },\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3008,
+        112
+      ],
+      "id": "b1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Mark Failed"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://firestore.googleapis.com/v1/' + $json.queue_doc + '?' + Object.keys($json.firestore_document.fields).map(field => 'updateMask.fieldPaths=' + encodeURIComponent(field)).join('&') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.firestore_document }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3312,
+        0
+      ],
+      "id": "b1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Update Queue Row",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "status -> done | failed. Failed rows are not retried; set status back to 'queued' in Firestore to retry."
+    }
+  ],
+  "connections": {
+    "Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Processing Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processing Rows": {
+      "main": [
+        [
+          {
+            "node": "Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate": {
+      "main": [
+        [
+          {
+            "node": "Next 20 Queued",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Stale Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stale Rows": {
+      "main": [
+        [
+          {
+            "node": "Requeue Stale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next 20 Queued": {
+      "main": [
+        [
+          {
+            "node": "Pick Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Rows": {
+      "main": [
+        [
+          {
+            "node": "One At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One At A Time": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Claim Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Body": {
+      "main": [
+        [
+          {
+            "node": "Claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim": {
+      "main": [
+        [
+          {
+            "node": "Claim Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "One At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Item": {
+      "main": [
+        [
+          {
+            "node": "Ingest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest Email": {
+      "main": [
+        [
+          {
+            "node": "Mark Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Done": {
+      "main": [
+        [
+          {
+            "node": "Update Queue Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed": {
+      "main": [
+        [
+          {
+            "node": "Update Queue Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Queue Row": {
+      "main": [
+        [
+          {
+            "node": "One At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "a2ddff602bf01e2a1f2b339841076e1a72e65856e7a24e74b905efc2d2783fce"
+  }
+}

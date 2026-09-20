@@ -2,68 +2,277 @@
   "nodes": [
     {
       "parameters": {
-        "pollTimes": {
-          "item": [
+        "rule": {
+          "interval": [
             {
-              "mode": "everyX",
-              "value": 1,
-              "unit": "minutes"
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a1b2c3d4-0000-4000-8000-000000000000",
+      "name": "Every Minute"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents:runQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"structuredQuery\": {\"from\": [{\"collectionId\": \"ingestion_queue\"}], \"orderBy\": [{\"field\": {\"fieldPath\": \"created_time\"}, \"direction\": \"DESCENDING\"}], \"limit\": 1}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Newest Queued",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "Newest created_time already in ingestion_queue = Drive poll cursor. No separate state doc."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cursor = newest Drive createdTime already queued. Empty queue -> epoch.\nconst doc = $input.first().json.document;\nreturn [{ json: { cursor: doc?.fields?.created_time?.timestampValue ?? '1970-01-01T00:00:00.000Z' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        0
+      ],
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Cursor"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"'1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder' and createdTime >= '\" + $json.cursor + \"'\" }}"
+            },
+            {
+              "name": "orderBy",
+              "value": "createdTime"
+            },
+            {
+              "name": "pageSize",
+              "value": "20"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,createdTime)"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
             }
           ]
         },
-        "triggerOn": "specificFolder",
-        "folderToWatch": {
-          "__rl": true,
-          "value": "https://drive.google.com/drive/u/0/folders/1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6",
-          "mode": "url"
-        },
-        "event": "fileCreated",
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "type": "n8n-nodes-base.googleDriveTrigger",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        -15776,
-        7584
+        912,
+        0
       ],
-      "id": "3ce3b9a6-a4e7-420e-bd36-f58535d66b42",
-      "name": "Google Drive Trigger1",
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "List 20 New Files",
+      "notesInFlow": true,
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "rzkWb8Dad9B4NaAS",
           "name": "Google Drive account"
         }
-      }
+      },
+      "notes": "Replaces Google Drive Trigger (which fetched every file with fields=*). Hard cap 20 files, 3 fields each, oldest first."
     },
     {
       "parameters": {
-        "workflowId": {
-          "__rl": true,
-          "mode": "list",
-          "value": "",
-          "cachedResultName": "ingestion"
-        },
-        "mode": "each",
+        "jsCode": "// Drive files.list -> one item per file. Query uses >= cursor so the boundary file repeats once; create-only enqueue ignores it.\n// ponytail: stalls only if 20+ files share the exact same createdTime millisecond; raise pageSize if that ever happens.\nreturn ($input.first().json.files ?? []).map(file => ({ json: file }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Split Files"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// One tiny queue doc per Drive file. Key = createdTime + Drive file id, so a\n// re-uploaded revision (new Drive id) gets its own row and sorts after the original.\nconst file = $json;\nif (typeof file.id !== 'string' || !file.id) throw new Error('Drive item has no file id.');\nconst created = file.createdTime ?? new Date().toISOString();\nreturn { json: {\n  queue_doc_id: created + '_' + file.id,\n  firestore_document: { fields: {\n    file_id: { stringValue: file.id },\n    name: { stringValue: file.name ?? '' },\n    created_time: { timestampValue: created },\n    status: { stringValue: 'queued' },\n    queued_at: { timestampValue: new Date().toISOString() },\n  } },\n} };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        0
+      ],
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Build Queue Doc"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents/ingestion_queue/' + encodeURIComponent($json.queue_doc_id) + '?currentDocument.exists=false' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.firestore_document }}",
         "options": {
-          "waitForSubWorkflow": true
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 30000
         }
       },
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        -15476,
-        7584
+        1808,
+        0
       ],
-      "id": "9b1c2d3e-4f50-4a6b-8c7d-0e1f2a3b4c5d",
-      "name": "Ingest Email"
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Enqueue",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "r9aWZJ69aHpN4v8x",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "Create-only (currentDocument.exists=false). 'Never Error' on, so a duplicate Drive file id comes back as a normal item with error.status = FAILED_PRECONDITION. Sub-workflow is NOT called here; ingestion-drain picks rows up 20 at a time."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Enqueue ran with 'Never Error', so the raw Firestore reply is here.\n// Create-only precondition failure (same Drive file id already queued) -> skip. Anything else -> fail loudly.\nconst e = $json.error;\nif (!e) return { json: { enqueued: $json.name } };\nif (['FAILED_PRECONDITION', 'ALREADY_EXISTS'].includes(e.status)) return { json: { skipped: true, reason: 'already queued' } };\nthrow new Error('Enqueue failed: ' + e.status + ' ' + e.message);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2112,
+        0
+      ],
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Check Enqueue"
     }
   ],
   "connections": {
-    "Google Drive Trigger1": {
+    "Every Minute": {
       "main": [
         [
           {
-            "node": "Ingest Email",
+            "node": "Newest Queued",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Newest Queued": {
+      "main": [
+        [
+          {
+            "node": "Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cursor": {
+      "main": [
+        [
+          {
+            "node": "List 20 New Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List 20 New Files": {
+      "main": [
+        [
+          {
+            "node": "Split Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Files": {
+      "main": [
+        [
+          {
+            "node": "Build Queue Doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Queue Doc": {
+      "main": [
+        [
+          {
+            "node": "Enqueue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enqueue": {
+      "main": [
+        [
+          {
+            "node": "Check Enqueue",
             "type": "main",
             "index": 0
           }

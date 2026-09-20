@@ -7,10 +7,10 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -15776,
-        7584
+        -2576,
+        544
       ],
-      "id": "3ce3b9a6-a4e7-420e-bd36-f58535d66b42",
+      "id": "d27a2345-300c-49d2-a536-e4d2e4ea5998",
       "name": "Start"
     },
     {
@@ -24,10 +24,10 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        -14912,
-        7520
+        -1712,
+        480
       ],
-      "id": "dc6637d8-87b1-4344-ab88-240ef3235184",
+      "id": "be7cfe23-04dd-46d8-82f8-d7efc2d4e481",
       "name": "Main Classifier1",
       "alwaysOutputData": false,
       "continueOnFail": true
@@ -41,10 +41,10 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        -11360,
-        7520
+        1840,
+        480
       ],
-      "id": "60c4349d-b2ec-4f07-993c-0d68405b813a",
+      "id": "95249e0f-c1d4-41eb-aa29-5b5b02b2440b",
       "name": "Field Normalise1",
       "onError": "continueErrorOutput"
     },
@@ -61,10 +61,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        -15600,
-        7584
+        -2400,
+        544
       ],
-      "id": "fee33570-6429-40df-befe-a445889575ec",
+      "id": "cea3d5fe-9dc7-4945-8dfc-6efb274053e4",
       "name": "Download file1",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -81,10 +81,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmOllama",
       "typeVersion": 1,
       "position": [
-        -14912,
-        7760
+        -1712,
+        720
       ],
-      "id": "75ece5ac-4a23-49d4-a5cd-9aaea463141c",
+      "id": "31e9cd23-cc32-42bd-8555-572153a3e30e",
       "name": "Ollama Model2",
       "credentials": {
         "ollamaApi": {
@@ -101,10 +101,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmOllama",
       "typeVersion": 1,
       "position": [
-        -11360,
-        7760
+        1840,
+        720
       ],
-      "id": "d219ae1c-8852-4081-a4a7-50c1fa747ad2",
+      "id": "aab239cd-d9e2-400b-ae3d-5890b6804031",
       "name": "Ollama Model3",
       "credentials": {
         "ollamaApi": {
@@ -121,10 +121,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        -15392,
-        7584
+        -2192,
+        544
       ],
-      "id": "d357a536-7528-4700-a0fe-d60d47264c06",
+      "id": "21597a3d-2ae6-47e5-b318-3ca42c9c695e",
       "name": "Parse Email JSON1"
     },
     {
@@ -140,10 +140,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        -12832,
-        7520
+        368,
+        480
       ],
-      "id": "78f146b9-8e6e-4fae-b0b4-8e46b4ed3c7d",
+      "id": "ace295ca-4acd-477a-8c7b-2051d5331944",
       "name": "Download File1",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -180,10 +180,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        -13312,
-        7520
+        -112,
+        480
       ],
-      "id": "bd671dfa-787b-476a-bc7c-23da443fb0ba",
+      "id": "ea8f27fd-12ff-4ce1-996d-d0ef452d9f54",
       "name": "Find Attachment1",
       "alwaysOutputData": true,
       "credentials": {
@@ -202,10 +202,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        -12352,
-        7200
+        848,
+        160
       ],
-      "id": "c4573b59-d933-4c8c-9f8c-3de1262b5259",
+      "id": "80ab341e-8f09-4437-b699-a63718291b5d",
       "name": "Parse TXT1",
       "onError": "continueErrorOutput"
     },
@@ -220,10 +220,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        -12352,
-        7408
+        848,
+        368
       ],
-      "id": "a91dbadf-eed8-42b1-b463-9215ab322319",
+      "id": "28a9b14f-1fe6-46d1-be6f-50ab9b6318f4",
       "name": "Read PDF1",
       "onError": "continueErrorOutput"
     },
@@ -238,10 +238,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        -12352,
-        7600
+        848,
+        560
       ],
-      "id": "ef216944-4374-45c1-99e9-1125673a5a38",
+      "id": "420df925-07da-4eb9-957f-c4c1ebdb8515",
       "name": "Read Excel1",
       "alwaysOutputData": true,
       "notesInFlow": true,
@@ -349,10 +349,10 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        -12592,
-        7520
+        608,
+        480
       ],
-      "id": "81db811a-e2c5-4fad-bf80-767035b64e73",
+      "id": "aebabb5f-609d-4ad2-8085-aedbf431581a",
       "name": "File Extension Categorization1"
     },
     {
@@ -363,10 +363,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -11600,
-        7520
+        1600,
+        480
       ],
-      "id": "e99aa630-3486-4a88-8135-24905ed60b5d",
+      "id": "021f01a0-a51d-4d26-91f3-f4b5470ba914",
       "name": "Normalize & Tag Data1",
       "onError": "continueErrorOutput"
     },
@@ -378,10 +378,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -10992,
-        7520
+        2208,
+        480
       ],
-      "id": "857cdd92-4262-4162-b9dc-2a54b74001e4",
+      "id": "40ffc22b-011c-46ac-a231-7b4d0f24304d",
       "name": "Re-attach Metadata1",
       "onError": "continueErrorOutput"
     },
@@ -407,10 +407,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -10512,
-        7520
+        2688,
+        480
       ],
-      "id": "8a94e4d4-c53d-4dc0-8370-596d7ecabdf3",
+      "id": "4e837daa-238b-4e9c-8bf3-ecaf66885049",
       "name": "Write to Firestore1",
       "notesInFlow": true,
       "credentials": {
@@ -429,10 +429,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -10752,
-        7520
+        2448,
+        480
       ],
-      "id": "5cbf3634-0918-45c7-82f9-538917efe29e",
+      "id": "7e1efebe-7d18-44bd-ad67-9da349b4e8cb",
       "name": "Prepare for Firestore1",
       "notesInFlow": true,
       "onError": "continueErrorOutput",
@@ -446,10 +446,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -15152,
-        7520
+        -1952,
+        480
       ],
-      "id": "fc452a3f-a36a-4ea1-a83b-9c48900057fc",
+      "id": "2adecd21-dc97-4a84-bbc1-4d6b0b920cd4",
       "name": "Normalize Email1"
     },
     {
@@ -460,10 +460,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14272,
-        7520
+        -1072,
+        480
       ],
-      "id": "dfac6c23-a1ef-436d-82ff-5d8475c4cac9",
+      "id": "6fdd9222-7c74-4770-9b7e-a6bd10d46916",
       "name": "Prepare Email Log1"
     },
     {
@@ -488,10 +488,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -14032,
-        7520
+        -832,
+        480
       ],
-      "id": "9856eb41-4680-441c-9c38-fdfb21610056",
+      "id": "544c6a28-416b-427a-893e-ff037b248880",
       "name": "Log Email to Firestore1",
       "notesInFlow": true,
       "credentials": {
@@ -509,10 +509,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13792,
-        7520
+        -592,
+        480
       ],
-      "id": "ac169bdf-9bb2-4543-b6b8-ae5df5266b2a",
+      "id": "650ba5e8-f3cf-4e44-9f8a-f85a5f692428",
       "name": "Expand Attachments1"
     },
     {
@@ -524,10 +524,10 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        -13552,
-        7520
+        -352,
+        480
       ],
-      "id": "0c136a9b-bfc0-45a8-b5f6-e03913d2a74a",
+      "id": "e7c73622-3887-44f4-a361-84f349054e42",
       "name": "Loop Attachments1"
     },
     {
@@ -537,10 +537,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -13072,
-        7520
+        128,
+        480
       ],
-      "id": "2edf0e1a-c5aa-4078-b6a4-6bdb23e73b8e",
+      "id": "14a80fff-b679-4704-ba8b-60b57a25afea",
       "name": "Validate Attachment Match1",
       "onError": "continueErrorOutput"
     },
@@ -551,10 +551,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12112,
-        7600
+        1088,
+        560
       ],
-      "id": "a62a68bf-06b6-45e7-972e-3b0da5baa6d4",
+      "id": "4b91cdf9-8532-4fce-a406-0d01cd0bbe19",
       "name": "Combine Excel Rows1",
       "onError": "continueErrorOutput"
     },
@@ -566,10 +566,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12352,
-        7840
+        848,
+        800
       ],
-      "id": "aa80678e-acc4-4ad7-a280-9b4ab5c4ffe5",
+      "id": "749a7b9c-bfca-4f89-925b-9ce1d31c3345",
       "name": "DOCX as ZIP1",
       "onError": "continueErrorOutput"
     },
@@ -578,10 +578,10 @@
       "type": "n8n-nodes-base.compression",
       "typeVersion": 1.1,
       "position": [
-        -12112,
-        7840
+        1088,
+        800
       ],
-      "id": "6f5fda14-b8cd-4a3d-b59e-10adbb3bb503",
+      "id": "1cf5f399-05cd-4331-85e2-6201fe963fe5",
       "name": "Unzip DOCX1",
       "onError": "continueErrorOutput"
     },
@@ -592,10 +592,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -11872,
-        7840
+        1328,
+        800
       ],
-      "id": "702a662f-3dbf-4671-a969-500d25b73b2e",
+      "id": "f56d0ed9-ffa8-4d00-9b5d-0ff3b52fabe1",
       "name": "Read DOCX Text1",
       "onError": "continueErrorOutput"
     },
@@ -607,10 +607,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12352,
-        8080
+        848,
+        1040
       ],
-      "id": "8b31553a-efca-4727-8c6e-48ccf9f7ee29",
+      "id": "8bfd67d6-e368-4b5f-be07-3b77dde20f1b",
       "name": "Unsupported Attachment1",
       "onError": "continueErrorOutput"
     },
@@ -622,10 +622,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -10992,
-        8288
+        2208,
+        1248
       ],
-      "id": "3098e27f-28a6-48fc-a6d4-071a3e7a364a",
+      "id": "51813778-c54d-40c2-8c11-07f964b23330",
       "name": "Prepare Attachment Error1"
     },
     {
@@ -650,10 +650,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -10752,
-        8288
+        2448,
+        1248
       ],
-      "id": "29a87a4b-49ca-4820-a666-bfcadbabe698",
+      "id": "626eddf8-a2fa-46d1-8b34-cbc0c1c3eb08",
       "name": "Log Attachment Error1",
       "notesInFlow": true,
       "credentials": {
@@ -672,10 +672,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -14560,
-        7520
+        -1360,
+        480
       ],
-      "id": "2748120b-cc40-4050-80d8-ab3e993c540a",
+      "id": "556df893-9e8b-4ea5-a191-594891abe3a1",
       "name": "Validate Classification1"
     },
     {
@@ -690,10 +690,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -13248,
-        7008
+        -48,
+        -32
       ],
-      "id": "f1f15d65-6e56-46a6-ad7a-edd026fb8599",
+      "id": "4af5906b-aced-440a-a9a0-fb58985aef19",
       "name": "Read Email Doc1",
       "credentials": {
         "googleFirebaseCloudFirestoreOAuth2Api": {
@@ -710,10 +710,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -12848,
-        7008
+        352,
+        -32
       ],
-      "id": "70772093-d7f9-4286-b9f6-12922915fb6d",
+      "id": "7462b756-9af4-456a-9ff3-369e78042ed9",
       "name": "Compare Fields1"
     },
     {
@@ -738,10 +738,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -12448,
-        7008
+        752,
+        -32
       ],
-      "id": "1d55d60c-7e70-42e7-974f-05dd10f96a25",
+      "id": "5d20560d-5b29-4ae1-a6ee-5e87317c9980",
       "name": "Write Comparison1",
       "credentials": {
         "googleFirebaseCloudFirestoreOAuth2Api": {
@@ -752,6 +752,17 @@
     }
   ],
   "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Download file1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Main Classifier1": {
       "main": [
         [
@@ -1232,17 +1243,6 @@
         [
           {
             "node": "Write Comparison1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Start": {
-      "main": [
-        [
-          {
-            "node": "Download file1",
             "type": "main",
             "index": 0
           }
