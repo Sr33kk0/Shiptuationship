@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { CATS, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { CATS, dayKey, fmtDate, fmtTime, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
+import DateRangePicker from "./DateRangePicker";
 import { Icon } from "./Icon";
 import ReviewModal from "./ReviewModal";
+import SortSheet from "./SortSheet";
 import { useToast } from "./Shell";
 
 type Filter = "all" | Category;
@@ -40,8 +42,7 @@ const SUBS: { key: Sub; c: string; a: string; t: string }[] = [
 ];
 
 const compare = (a: Shipment, b: Shipment, key: SortKey) => {
-  const x = a[key];
-  const y = b[key];
+  const [x, y] = key === "rawDate" ? [a.at, b.at] : [a[key], b[key]]; // the Date column sorts by the full timestamp, so same-day emails keep their order
   return typeof x === "number" ? x - (y as number) : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" });
 };
 
@@ -57,6 +58,7 @@ export default function Emails() {
   const [range, setRange] = useState({ start: "", end: "" });
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rawDate", dir: "desc" });
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sortOpen, setSortOpen] = useState(false); // the sort sheet (phones and tablets)
 
   // Every tab is a real link to its own address.
   const href = (f: Filter, s: Sub = "all") => {
@@ -76,8 +78,8 @@ export default function Emails() {
   const rows = shipments
     .filter((s) => {
       if (![s.subject, s.sender, s.id].some((v) => v.toLowerCase().includes(q))) return false;
-      if (range.start && s.rawDate < range.start) return false;
-      if (range.end && s.rawDate > range.end) return false;
+      if (range.start && dayKey(s) < range.start) return false;
+      if (range.end && dayKey(s) > range.end) return false;
       if (filter !== "all" && s.category !== filter) return false;
       if (filter === "document-comparison") {
         if (sub === "needs-review") return s.status === "discrepancy";
@@ -128,17 +130,7 @@ export default function Emails() {
               )}
             </div>
 
-            <div className="daterange">
-              <Icon d="cal" size={14} />
-              <input type="date" value={range.start} onChange={(e) => setRange({ ...range, start: e.target.value })} title="Start date" aria-label="Start date" />
-              <span>to</span>
-              <input type="date" value={range.end} onChange={(e) => setRange({ ...range, end: e.target.value })} title="End date" aria-label="End date" />
-              {(range.start || range.end) && (
-                <button className="clear inline" onClick={() => setRange({ start: "", end: "" })} title="Clear date range" aria-label="Clear date range">
-                  <Icon d="x" size={14} sw={2} />
-                </button>
-              )}
-            </div>
+            <DateRangePicker value={range} onChange={setRange} />
           </div>
 
           <div className="filters">
@@ -153,17 +145,14 @@ export default function Emails() {
 
           {/* the column headers double as sort buttons on wide screens; on phones they are hidden, so sorting moves here */}
           <div className="sortbar">
-            <label htmlFor="sort-key">Sort by</label>
-            <select id="sort-key" value={sort.key} onChange={(e) => setSort({ key: e.target.value as SortKey, dir: sort.dir })}>
-              {COLS.map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <button className="sort-dir" onClick={() => setSort({ ...sort, dir: sort.dir === "asc" ? "desc" : "asc" })} aria-label={`Sorted ${sort.dir === "asc" ? "ascending" : "descending"}; tap to reverse`}>
-              <Icon d={sort.dir === "asc" ? "sortAsc" : "sortDesc"} size={16} sw={2.2} />
+            <button className="sort-trigger" onClick={() => setSortOpen(true)} aria-haspopup="dialog" aria-expanded={sortOpen}>
+              <Icon d="sortNone" size={16} sw={2} />
+              <span className="sort-trigger-label">Sort by</span>
+              <b>{COLS.find(([key]) => key === sort.key)?.[1]}</b>
+              <small>{sort.dir === "asc" ? "Ascending" : "Descending"}</small>
+              <Icon d="chevD" size={14} sw={2} />
             </button>
+            <SortSheet open={sortOpen} options={COLS} value={sort.key} dir={sort.dir} onChange={(key, dir) => setSort({ key, dir })} onClose={() => setSortOpen(false)} />
           </div>
 
           {filter === "document-comparison" && (
@@ -233,7 +222,10 @@ export default function Emails() {
                         {cat.label}
                       </span>
                     </td>
-                    <td className="muted date">{s.date}</td>
+                    <td className="muted date">
+                      <span className="d">{fmtDate(s)}</span>
+                      {fmtTime(s) && <span className="t">{fmtTime(s)}</span>}
+                    </td>
                     <td className="atts">
                       {s.attachmentCount > 0 ? (
                         <div className="att">

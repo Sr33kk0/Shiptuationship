@@ -48,7 +48,7 @@ export default function Dashboard() {
       </header>
 
       <div className="cards">
-        <div className="card fade-up" style={{ "--d": "0.12s" } as React.CSSProperties}>
+        <NavLink href="/emails?view=document-comparison" className="card fade-up" style={{ "--d": "0.12s" } as React.CSSProperties}>
           <div>
             <div className="card-top">
               <span className="card-title">Comparison Requests</span>
@@ -58,9 +58,9 @@ export default function Dashboard() {
           <div className="card-foot">
             <span>High-volume intake stream</span>
           </div>
-        </div>
+        </NavLink>
 
-        <div className="card fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
+        <NavLink href="/emails?view=validated" className="card fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
           <div>
             <div className="card-top">
               <span className="card-title">Validated</span>
@@ -72,7 +72,7 @@ export default function Dashboard() {
           <div className="card-foot">
             <span>Auto-cleared manifest checks</span>
           </div>
-        </div>
+        </NavLink>
 
         <NavLink href="/emails?view=needs-review" className="card fade-up" style={{ "--d": "0.36s" } as React.CSSProperties}>
           <div>
