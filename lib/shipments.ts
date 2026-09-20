@@ -35,6 +35,11 @@ export interface Shipment {
   date: string;
   rawDate: string;
   status: Status;
+  reviewedBy: string;
+  reviewedAt: string;
+  isRead: boolean;
+  markedReadBy: string;
+  markedReadAt: string;
   attachmentCount: number;
   attachmentNames: string[];
   emailBody: string;
