@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CATS, FIELDS, fmtWhen, mismatches, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { printEmail } from "@/lib/printEmail";
 import { Icon } from "./Icon";
 
 type Pane = "preview" | "email";
@@ -70,6 +71,41 @@ function Attachments({ names, heading }: { names: string[]; heading: string }) {
   );
 }
 
+type Reply = { body: string };
+
+// The auto-reply section that sits below an email: a cogwheel while the reply is being generated, then an editable, copyable body.
+function AutoReply({ reply, generating, onChange, onCopy }: { reply: Reply | null; generating: boolean; onChange: (r: Reply) => void; onCopy: (text: string, what: string) => void }) {
+  const ref = useRef<HTMLElement>(null);
+  const show = generating || !!reply;
+  useEffect(() => {
+    if (show) ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); // it opens below the fold on a long email
+  }, [show]);
+  if (!show) return null;
+  return (
+    <section className="reply" ref={ref} aria-label="Auto reply" aria-busy={generating}>
+      <h4>Auto Reply</h4>
+      {generating || !reply ? (
+        <div className="reply-wait" role="status">
+          <span className="cog">
+            <Icon d="cog" size={28} sw={1.6} />
+          </span>
+          Generating reply…
+        </div>
+      ) : (
+        <>
+          <div className="reply-field">
+            <div className="reply-top">
+              <label htmlFor="reply-body">Body</label>
+              <button className="btn ghost" onClick={() => onCopy(reply.body, "body")}>Copy</button>
+            </div>
+            <textarea id="reply-body" rows={14} value={reply.body} onChange={(e) => onChange({ ...reply, body: e.target.value })} />
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 interface Props {
   shipment: Shipment;
   saving: boolean;
@@ -77,15 +113,28 @@ interface Props {
   onSave: (side: Side, fields: Fields) => void;
   onMarkRead: () => void;
   onToast: (msg: string) => void;
+  onPrev?: () => void; // undefined = no earlier email in the list
+  onNext?: () => void;
 }
 
 const actionTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "medium" }) + " MYT";
 
-export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast }: Props) {
+export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast, onPrev, onNext }: Props) {
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
   const [side, setSide] = useState<Side>("bl"); // which document the form edits
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
   const [pane, setPane] = useState<Pane>("preview");
+  const [reply, setReply] = useState<Reply | null>(null);
+  const [generating, setGenerating] = useState(false);
+  // Stepping to another email keeps the modal (and the chosen pane) open; only the form belongs to one email, so it restarts here.
+  const [shownId, setShownId] = useState(s.id);
+  if (shownId !== s.id) {
+    setShownId(s.id);
+    setSide("bl");
+    setForm(s.extractedFields ?? ({} as Fields));
+    setReply(null);
+    setGenerating(false);
+  }
   const [docView, setDocView] = useState<DocView>("split");
   const [formOpen, setFormOpen] = useState(true);
   const cat = CATS[s.category];
@@ -95,6 +144,17 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const leaving = useRef(false);
   const exitTimer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(exitTimer.current), []);
+  const replyTimer = useRef<number>(undefined);
+  useEffect(() => () => clearTimeout(replyTimer.current), [s.id]); // a reply still loading belongs to the email it was asked for
+  const generate = () => {
+    clearTimeout(replyTimer.current);
+    setGenerating(true);
+    // ponytail: stand-in wait with an empty body; swap for the LLM call, which fills the body when it returns
+    replyTimer.current = window.setTimeout(() => {
+      setReply({ body: "" });
+      setGenerating(false);
+    }, 1500);
+  };
   const leave = (then: () => void) => {
     if (leaving.current) return; // already on its way out (a second click or key press)
     leaving.current = true;
@@ -110,19 +170,29 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const saved = (x: Side) => (x === "si" ? s.referenceFields : s.extractedFields);
+  const dirty = FIELDS.some((f) => form[f.key] !== saved(side)?.[f.key]);
+  const copy = (text: string, what: string) =>
+    (navigator.clipboard?.writeText(text) ?? Promise.reject()).then(
+      () => onToast(`Copied ${what}`),
+      () => onToast("Could not copy — select the text and copy it manually"),
+    );
+  const step = (go?: () => void) => {
+    if (!go) return;
+    if (dirty) onToast(`Discarded unsaved ${side.toUpperCase()} edits`);
+    go();
+  };
+
   useEffect(() => {
-    if (!isCmp) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]")) return; // not while typing in a field
-      if (e.key === "ArrowRight") setPane("email");
-      if (e.key === "ArrowLeft") setPane("preview");
+      if (e.key === "ArrowRight") step(onNext);
+      if (e.key === "ArrowLeft") step(onPrev);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isCmp]);
+  }, [onPrev, onNext, dirty, side]);
 
-  const saved = (x: Side) => (x === "si" ? s.referenceFields : s.extractedFields);
-  const dirty = FIELDS.some((f) => form[f.key] !== saved(side)?.[f.key]);
   const switchSide = (next: Side) => {
     if (next === side) return;
     if (dirty) onToast(`Discarded unsaved ${side.toUpperCase()} edits`);
@@ -138,13 +208,12 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   // exactly (it can compare more loosely than this screen does), fall back to the fields it named, so the banner never has nothing to point at.
   const named = s.status === "discrepancy" ? s.discrepancies.map((d) => d.field) : [];
   const flagged: FieldKey[] = bad.length ? bad : !dirty ? named : [];
-  // The banner lists exactly what is marked below: the live differences, or the automatic check's own wording when it had to be used instead.
-  const summary = bad.length && si && bl
-    ? bad.map((k) => `${FIELDS.find((f) => f.key === k)!.label} (${si[k]} on SI vs ${bl[k]} on Draft BL)`)
-    : s.discrepancies.map((d) => `${d.label} (${d.si} on SI vs ${d.bl} on Draft BL)`);
 
   return (
     <div className={`overlay${closing ? " closing" : ""}`}>
+      <button className="nav-email prev" disabled={!onPrev} onClick={() => step(onPrev)} aria-label="Previous email" title="Previous email (left arrow key)">
+        <Icon d="chevL" size={20} sw={2.4} />
+      </button>
       <div className="modal" role="dialog" aria-modal="true" aria-label={`${isCmp ? "Manifest Inspection" : "Email Transmission"} ${s.id}`}>
         <div className="modal-head">
           <div className="modal-title">
@@ -166,7 +235,11 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
             </div>
           </div>
           <div className="modal-actions">
-            {isCmp && <button className="btn ghost" disabled={saving || s.isRead} onClick={onMarkRead}>{s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}</button>}
+            <button className="btn ghost" onClick={() => printEmail(s) || onToast("Allow pop-ups to open the print preview")} title="Open a print preview of this email (A4)">
+              <Icon d="print" size={14} sw={2} />
+              Print
+            </button>
+            {isCmp && <button className="btn dark" disabled={saving || s.isRead} onClick={onMarkRead}>{s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}</button>}
             {isCmp && (
               <Seg
                 value={pane}
@@ -197,18 +270,6 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
 
         {isCmp && si && bl ? (
           <div className="cmp">
-            {s.status === "discrepancy" && summary.length > 0 && (
-              <div className="banner">
-                <div>
-                  <Icon d="alert" sw={2} />
-                  <span>
-                    <strong>Discrepancy Detected:</strong> {summary.join(" • ")}
-                  </span>
-                </div>
-                <em>Action Required</em>
-              </div>
-            )}
-
             <div className="cmp-body">
               {formOpen && (
                 <div className="form-pane">
@@ -288,36 +349,30 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                       />
                     </div>
                     <div className="docs">
-                      {/* keyed by the view, so each switch re-creates the papers and they fade in again (typing in the form does not) */}
+                      {/* keyed by the email and the view, so each switch re-creates the papers and they fade in again (typing in the form does not) */}
                       {/* the red text follows the document being edited (the "Editing" switch): the SI's wrong fields when editing the SI, the BL's when editing the BL, never both */}
-                      {docView !== "bl" && <Paper key={`si-${docView}`} kind="si" refNo={s.siRef} values={si} bad={side === "si" ? flagged : []} />}
-                      {docView !== "si" && <Paper key={`bl-${docView}`} kind="bl" refNo={s.blRef} values={bl} bad={side === "bl" ? flagged : []} />}
+                      {docView !== "bl" && <Paper key={`si-${s.id}-${docView}`} kind="si" refNo={s.siRef} values={si} bad={side === "si" ? flagged : []} />}
+                      {docView !== "si" && <Paper key={`bl-${s.id}-${docView}`} kind="bl" refNo={s.blRef} values={bl} bad={side === "bl" ? flagged : []} />}
                     </div>
-                    <button className="pane-jump next" onClick={() => setPane("email")} title="Read the email (right arrow key)">
-                      Read Email
-                      <Icon d="chevR" size={16} sw={2.4} />
-                    </button>
                   </>
                 ) : (
-                  <>
-                    <div className="email">
-                      <div className="email-card">
-                        <div className="email-head">
-                          <h4>{s.subject}</h4>
-                          <div className="email-meta">
-                            <span>From: {s.sender}</span>
-                            <span>Date: {fmtWhen(s)}</span>
-                          </div>
+                  <div className="email">
+                    <div className="email-card" key={s.id}>
+                      <div className="email-head">
+                        <h4>{s.subject}</h4>
+                        <div className="email-meta">
+                          <span>From: {s.sender}</span>
+                          <span>Date: {fmtWhen(s)}</span>
                         </div>
-                        <div className="email-body">{s.emailBody}</div>
-                        <Attachments names={s.attachmentNames} heading={`Attachments (${s.attachmentNames.length})`} />
                       </div>
+                      <div className="email-body">{s.emailBody}</div>
+                      <Attachments names={s.attachmentNames} heading={`Attachments (${s.attachmentNames.length})`} />
                     </div>
-                    <button className="pane-jump prev" onClick={() => setPane("preview")} title="Back to the comparison (left arrow key)">
-                      <Icon d="chevL" size={16} sw={2.4} />
-                      Comparison
+                    <button className="btn dark reply-btn" disabled={generating} onClick={generate}>
+                      {reply ? "Regenerate auto reply" : "Generate auto reply"}
                     </button>
-                  </>
+                    <AutoReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
+                  </div>
                 )}
               </div>
             </div>
@@ -339,10 +394,14 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
               </div>
               <div className="email-body boxed">{s.emailBody}</div>
               <Attachments names={s.attachmentNames} heading="Attached Files" />
+              <AutoReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
             </div>
             <div className="plain-foot">
               <button className="btn ghost lg" onClick={close}>
                 Close
+              </button>
+              <button className="btn dark lg" disabled={generating} onClick={generate}>
+                {reply ? "Regenerate auto reply" : "Generate auto reply"}
               </button>
               <button className="btn dark lg" disabled={saving || s.isRead} onClick={onMarkRead}>
                 {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
@@ -351,6 +410,9 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
           </div>
         )}
       </div>
+      <button className="nav-email next" disabled={!onNext} onClick={() => step(onNext)} aria-label="Next email" title="Next email (right arrow key)">
+        <Icon d="chevR" size={20} sw={2.4} />
+      </button>
     </div>
   );
 }
