@@ -228,8 +228,10 @@ export default function Landing() {
 
       <footer className="site-foot">
         <div className="site-wrap">
-          <span>Shiptuationship · SI &amp; BL Verification Desk</span>
-          <span>Built for the Averis Hackathon 2026</span>
+          <span>Shiptuationship · AI Logistics Tool</span>
+          <span>
+            Powered by WokHei <span aria-hidden="true">🥘</span>
+          </span>
         </div>
       </footer>
     </div>
