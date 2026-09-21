@@ -246,8 +246,8 @@ export default function Emails() {
                       )}
                     </td>
                     <td className="stat">
-                      {s.category === "document-comparison" && s.status === "discrepancy" && (
-                        <span className="status rose">
+                      {s.status === "discrepancy" && (
+                        <span className="status rose" title={s.reviewReasons.join('\n')}>
                           <span className="dot" />
                           Needs Review
                         </span>
