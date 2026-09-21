@@ -320,6 +320,15 @@ a.filter, a.sub { text-decoration: none; }
 .sub[aria-current="page"] { background: var(--a); color: var(--t); }
 
 .table-wrap { flex: 1; overflow: auto; min-height: 0; }
+.pagination { min-height: 58px; padding: 10px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: flex-end; gap: 20px; flex-shrink: 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.page-range { margin-right: auto; }
+.page-limit { display: flex; align-items: center; gap: 8px; }
+.page-limit select { min-height: 34px; padding: 5px 28px 5px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--field); color: var(--ink); font: inherit; cursor: pointer; }
+.page-number { color: var(--ink-2); font-weight: 600; }
+.page-buttons { display: flex; gap: 6px; }
+.page-buttons button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; display: flex; align-items: center; gap: 5px; background: var(--surface); color: var(--ink-2); font-weight: 600; }
+.page-buttons button:hover:not(:disabled) { background: var(--field); border-color: var(--edge-2); }
+.page-buttons button:disabled { opacity: .42; cursor: default; }
 table { width: 100%; text-align: left; font-size: 14px; border-collapse: collapse; }
 thead { position: sticky; top: 0; background: var(--surface); z-index: 10; box-shadow: 0 1px 0 var(--border); }
 th { padding: 0; white-space: nowrap; background: var(--surface); text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
@@ -671,6 +680,11 @@ a.chip svg:last-child { color: var(--faint); }
   .filters::-webkit-scrollbar, .substatus::-webkit-scrollbar { display: none; }
   .filter, .sub, .substatus > span { flex-shrink: 0; scroll-snap-align: start; }
   .substatus > span { flex-shrink: 0; }
+  .pagination { padding: 10px 14px; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
+  .page-range { width: 100%; margin: 0; }
+  .page-limit > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .page-buttons button span { display: none; }
+  .page-buttons button { width: 38px; justify-content: center; padding: 6px; }
 
 }
 

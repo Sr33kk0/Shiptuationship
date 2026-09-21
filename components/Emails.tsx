@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { paginate } from "@/lib/pagination";
 import { CATS, dayKey, fmtDate, fmtTime, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
 import ExportEmails from "./ExportEmails";
 import { Icon } from "./Icon";
+import Pagination from "./Pagination";
 import Profile from "./Profile";
 import ReviewModal from "./ReviewModal";
 import SortSheet from "./SortSheet";
@@ -64,6 +66,9 @@ export default function Emails() {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rawDate", dir: "desc" });
   const [openId, setOpenId] = useState<string | null>(null);
   const [sortOpen, setSortOpen] = useState(false); // the sort sheet (phones and tablets)
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const table = useRef<HTMLDivElement>(null);
 
   // Every tab is a real link to its own address.
   const href = (f: Filter, s: Sub = sub) => {
@@ -93,6 +98,13 @@ export default function Emails() {
       return true;
     })
     .sort((a, b) => (sort.dir === "desc" ? -1 : 1) * compare(a, b, sort.key));
+  const paged = paginate(rows, page, limit);
+
+  useEffect(() => setPage(1), [query, range.start, range.end, filter, sub, sort.key, sort.dir]);
+  const goToPage = (next: number) => {
+    setPage(next);
+    table.current?.scrollTo({ top: 0 });
+  };
 
   const selected = shipments.find((s) => s.id === openId) ?? null;
   // The modal steps through the list as currently filtered and sorted.
@@ -185,7 +197,7 @@ export default function Emails() {
           </div>
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap" ref={table}>
           <table>
             <thead>
               <tr>
@@ -222,7 +234,7 @@ export default function Emails() {
                   </td>
                 </tr>
               )}
-              {rows.map((s, i) => {
+              {paged.items.map((s, i) => {
                 const cat = CATS[s.category];
                 return (
                   <tr
@@ -287,6 +299,7 @@ export default function Emails() {
             </tbody>
           </table>
         </div>
+        <Pagination {...paged} total={rows.length} limit={limit} onPage={goToPage} onLimit={(size) => { setLimit(size); goToPage(1); }} />
       </section>
 
       {selected && (

@@ -211,10 +211,36 @@ export function toShipment(doc: Doc): Shipment {
 
 // ---- Public API -------------------------------------------------------------
 
+type FsDocument = { name: string; fields?: Record<string, FsValue> };
+
+async function listDocuments(collection: string): Promise<FsDocument[]> {
+  const documents: FsDocument[] = [];
+  let pageToken = "";
+  do {
+    const query = new URLSearchParams({ pageSize: "300" });
+    if (pageToken) query.set("pageToken", pageToken);
+    const page = (await fsGet(`${collection}?${query}`)) as { documents?: FsDocument[]; nextPageToken?: string };
+    documents.push(...(page.documents ?? []));
+    pageToken = page.nextPageToken ?? "";
+  } while (pageToken);
+  return documents;
+}
+
 async function listEmailDocs(): Promise<Doc[]> {
-  // ponytail: single page; add a nextPageToken loop past 300 emails.
-  const data = (await fsGet("emails?pageSize=300")) as { documents?: { fields?: Record<string, FsValue> }[] };
-  return (data.documents ?? []).map((d) => decodeMap(d.fields ?? {}));
+  return (await listDocuments("emails")).map((d) => decodeMap(d.fields ?? {}));
+}
+
+async function listActivityDocs(): Promise<FsDocument[]> {
+  // ponytail: offset batches avoid a new Firestore index; use an ordered cursor if skipped-read cost becomes material.
+  const documents: FsDocument[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const rows = await fs(":runQuery", { method: "POST", body: JSON.stringify({ structuredQuery: {
+      from: [{ collectionId: "activity", allDescendants: true }], limit: 500, ...(offset && { offset }),
+    } }) }) as { document?: FsDocument }[];
+    const page = rows.flatMap((row) => row.document ? [row.document] : []);
+    documents.push(...page);
+    if (page.length < 500) return documents;
+  }
 }
 
 export async function listEmails(): Promise<Shipment[]> {
@@ -240,19 +266,17 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
   }
 
   const [names, rows] = await Promise.all([
-    fsGet("moderators?pageSize=100").then((d: { documents?: { name: string; fields?: Record<string, FsValue> }[] }) =>
-      Object.fromEntries((d.documents ?? []).map((m) => [m.name.split("/").pop()!, str(decodeMap(m.fields ?? {}).display_name)]))),
-    // ponytail: one page of 500 activity docs, no server-side order (a collection-group order needs an index); sorted below.
-    fs(":runQuery", { method: "POST", body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "activity", allDescendants: true }], limit: 500 } }) }) as Promise<{ document?: { name: string; fields?: Record<string, FsValue> } }[]>,
+    listDocuments("moderators").then((documents) =>
+      Object.fromEntries(documents.map((m) => [m.name.split("/").pop()!, str(decodeMap(m.fields ?? {}).display_name)]))),
+    listActivityDocs(),
   ]);
   const subject = new Map(emails.map((e) => [str(e.email_id), str(e.subject)]));
   const label = Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], f.label]));
-  for (const r of rows) {
-    if (!r.document) continue;
-    const [, rawId, docId] = r.document.name.match(/\/emails\/([^/]+)\/activity\/([^/]+)$/) ?? [];
+  for (const document of rows) {
+    const [, rawId, docId] = document.name.match(/\/emails\/([^/]+)\/activity\/([^/]+)$/) ?? [];
     if (!rawId) continue;
     const emailId = decodeURIComponent(rawId);
-    const a = decodeMap(r.document.fields ?? {});
+    const a = decodeMap(document.fields ?? {});
     const moderator = str(a.moderator_id);
     const review = a.action === "review_saved";
     events.push({
