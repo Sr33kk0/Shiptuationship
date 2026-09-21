@@ -83,6 +83,7 @@ const CATEGORY: Record<string, Category> = {
   "New SI Request": "new-si",
   "Invoice Queries": "invoice",
   "General Messages": "general",
+  "Spam": "spam",
 };
 
 const STATUS: Record<string, Status> = { flagged: "discrepancy", needs_review: "discrepancy", incomplete: "discrepancy", cleared: "clean" };
@@ -97,8 +98,9 @@ function ingestionReasons(doc: Doc): string[] {
   const error = doc.last_ingestion_error as Doc | undefined;
   if (error) reasons.push(`Attachment ${str(error.filename) || '(unknown file)'} could not be processed: ${str(error.message) || 'No readable document data.'}`);
   const attachments = Array.isArray(doc.attachments) ? doc.attachments : [];
+  // Ingestion owns attachment-claim detection; banners and quoted history are not claims.
   if (!attachments.length && !doc.missing_attachments_warning &&
-      (doc.classification === 'Document-Comparison Request' || /\battach(?:ed|ments?)\b/i.test(str(doc.body)))) {
+      doc.classification === 'Document-Comparison Request') {
     reasons.push('No attachments were provided. Request the missing documents from the sender.');
   }
   return reasons;
@@ -183,7 +185,7 @@ export function toShipment(doc: Doc): Shipment {
     subject: str(doc.subject),
     sender,
     senderName,
-    category: CATEGORY[str(doc.classification)] ?? "other",
+    category: CATEGORY[str(doc.classification)] ?? "spam",
     date,
     rawDate,
     at,

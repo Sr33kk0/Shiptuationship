@@ -33,7 +33,7 @@ const FILTERS: { key: Filter; label: string; c: string; a: string; t?: string }[
   { key: "new-si", label: "SI Requests", c: "#7e22ce", a: "#9333ea" },
   { key: "invoice", label: "Invoices", c: "#b45309", a: "#d97706" },
   { key: "general", label: "General", c: "#525252", a: "#334155" },
-  { key: "other", label: "Other", c: "#be123c", a: "#e11d48" },
+  { key: "spam", label: "Spam", c: "#be123c", a: "#e11d48" },
 ];
 
 const SUBS: { key: Sub; c: string; a: string; t: string }[] = [
@@ -51,11 +51,13 @@ export default function Emails() {
   const { shipments, setShipments, loadState, busy } = useShipments();
   const showToast = useToast();
   const [saving, setSaving] = useState(false);
-  // The tab lives in the address bar: /emails?view=<category | needs-review | validated>, none = All.
-  // The dashboard links here with the same values.
-  const view = useSearchParams().get("view") ?? "";
-  const sub: Sub = view === "needs-review" || view === "validated" ? view : "all";
-  const filter: Filter = Object.keys(CATS).includes(view) ? (view as Category) : sub !== "all" ? "document-comparison" : "all";
+  // Category and status live in the URL; legacy dashboard status links target Comparisons.
+  const params = useSearchParams();
+  const view = params.get("view") ?? "";
+  const legacySub = view === "needs-review" || view === "validated" ? view : "all";
+  const status = params.get("status") ?? legacySub;
+  const sub: Sub = status === "needs-review" || status === "validated" ? status : "all";
+  const filter: Filter = Object.keys(CATS).includes(view) ? (view as Category) : legacySub !== "all" ? "document-comparison" : "all";
   const [query, setQuery] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rawDate", dir: "desc" });
@@ -63,17 +65,19 @@ export default function Emails() {
   const [sortOpen, setSortOpen] = useState(false); // the sort sheet (phones and tablets)
 
   // Every tab is a real link to its own address.
-  const href = (f: Filter, s: Sub = "all") => {
-    const v = f === "document-comparison" && s !== "all" ? s : f === "all" ? "" : f;
-    return v ? `/emails?view=${v}` : "/emails";
+  const href = (f: Filter, s: Sub = sub) => {
+    const search = new URLSearchParams();
+    if (f !== "all") search.set("view", f);
+    if (s !== "all") search.set("status", s);
+    return search.size ? `/emails?${search}` : "/emails";
   };
 
   const toggleSort = (key: SortKey) =>
     setSort((p) => (p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 
-  const cmp = shipments.filter((s) => s.category === "document-comparison");
-  const validated = cmp.filter((s) => s.status === "clean").length;
-  const needsReview = cmp.filter((s) => s.status === "discrepancy").length;
+  const categoryRows = shipments.filter((s) => filter === "all" || s.category === filter);
+  const validated = categoryRows.filter((s) => s.status === "clean").length;
+  const needsReview = categoryRows.filter((s) => s.status === "discrepancy").length;
   const count = (f: Filter) => (f === "all" ? shipments.length : shipments.filter((s) => s.category === f).length);
 
   const q = query.toLowerCase();
@@ -83,10 +87,8 @@ export default function Emails() {
       if (range.start && dayKey(s) < range.start) return false;
       if (range.end && dayKey(s) > range.end) return false;
       if (filter !== "all" && s.category !== filter) return false;
-      if (filter === "document-comparison") {
-        if (sub === "needs-review") return s.status === "discrepancy";
-        if (sub === "validated") return s.status === "clean";
-      }
+      if (sub === "needs-review") return s.status === "discrepancy";
+      if (sub === "validated") return s.status === "clean";
       return true;
     })
     .sort((a, b) => (sort.dir === "desc" ? -1 : 1) * compare(a, b, sort.key));
@@ -151,7 +153,7 @@ export default function Emails() {
               <Link key={f.key} href={href(f.key)} replace scroll={false} className="filter" aria-current={filter === f.key ? "page" : undefined} style={{ "--c": f.c, "--a": f.a, "--t": f.t } as React.CSSProperties}>
                 {f.label}
                 {loadState !== "loading" && ` (${count(f.key)})`}
-                {f.key === "document-comparison" && needsReview > 0 && <span className="dot" />}
+                {f.key === "document-comparison" && shipments.some((s) => s.category === f.key && s.status === "discrepancy") && <span className="dot" />}
               </Link>
             ))}
           </div>
@@ -168,19 +170,17 @@ export default function Emails() {
             <SortSheet open={sortOpen} options={COLS} value={sort.key} dir={sort.dir} onChange={(key, dir) => setSort({ key, dir })} onClose={() => setSortOpen(false)} />
           </div>
 
-          {filter === "document-comparison" && (
-            <div className="substatus">
+          <div className="substatus">
               <span>Status:</span>
               {SUBS.map((s) => (
-                <Link key={s.key} href={href("document-comparison", s.key)} replace scroll={false} className="sub" aria-current={sub === s.key ? "page" : undefined} style={{ "--c": s.c, "--a": s.a, "--t": s.t } as React.CSSProperties}>
+                <Link key={s.key} href={href(filter, s.key)} replace scroll={false} className="sub" aria-current={sub === s.key ? "page" : undefined} style={{ "--c": s.c, "--a": s.a, "--t": s.t } as React.CSSProperties}>
                   {s.key === "needs-review" && <span className="dot" />}
                   {s.key === "validated" && <Icon d="check" size={14} sw={2.2} />}
                   {s.key === "all" ? "All" : s.key === "validated" ? "Validated" : "Needs Review"}
-                  {loadState !== "loading" && ` (${s.key === "all" ? cmp.length : s.key === "validated" ? validated : needsReview})`}
+                  {loadState !== "loading" && ` (${s.key === "all" ? categoryRows.length : s.key === "validated" ? validated : needsReview})`}
                 </Link>
               ))}
-            </div>
-          )}
+          </div>
         </div>
 
         <div className="table-wrap">
@@ -201,7 +201,7 @@ export default function Emails() {
               </tr>
             </thead>
             {/* keyed by tab so switching tabs replays the cascade; re-sorting replays it too (moved rows are re-inserted), typing and the 30s refresh do not */}
-            <tbody key={view}>
+            <tbody key={`${view}:${sub}`}>
               {loadState === "loading" &&
                 rows.length === 0 &&
                 Array.from({ length: 8 }, (_, i) => (
@@ -271,7 +271,7 @@ export default function Emails() {
                           Needs Review
                         </span>
                       )}
-                      {s.category === "document-comparison" && s.status === "clean" && (
+                      {s.status === "clean" && (
                         <span className="status green">
                           <Icon d="check" size={14} sw={2.2} />
                           Validated
