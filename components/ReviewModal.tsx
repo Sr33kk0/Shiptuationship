@@ -138,11 +138,6 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   // exactly (it can compare more loosely than this screen does), fall back to the fields it named, so the banner never has nothing to point at.
   const named = s.status === "discrepancy" ? s.discrepancies.map((d) => d.field) : [];
   const flagged: FieldKey[] = bad.length ? bad : !dirty ? named : [];
-  // The banner lists exactly what is marked below: the live differences, or the automatic check's own wording when it had to be used instead.
-  const summary = bad.length && si && bl
-    ? bad.map((k) => `${FIELDS.find((f) => f.key === k)!.label} (${si[k]} on SI vs ${bl[k]} on Draft BL)`)
-    : s.discrepancies.map((d) => `${d.label} (${d.si} on SI vs ${d.bl} on Draft BL)`);
-
   return (
     <div className={`overlay${closing ? " closing" : ""}`}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={`${isCmp ? "Manifest Inspection" : "Email Transmission"} ${s.id}`}>
@@ -197,18 +192,6 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
 
         {isCmp && si && bl ? (
           <div className="cmp">
-            {s.status === "discrepancy" && summary.length > 0 && (
-              <div className="banner">
-                <div>
-                  <Icon d="alert" sw={2} />
-                  <span>
-                    <strong>Discrepancy Detected:</strong> {summary.join(" • ")}
-                  </span>
-                </div>
-                <em>Action Required</em>
-              </div>
-            )}
-
             <div className="cmp-body">
               {formOpen && (
                 <div className="form-pane">
