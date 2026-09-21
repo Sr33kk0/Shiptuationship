@@ -92,6 +92,9 @@ export default function Emails() {
     .sort((a, b) => (sort.dir === "desc" ? -1 : 1) * compare(a, b, sort.key));
 
   const selected = shipments.find((s) => s.id === openId) ?? null;
+  // The modal steps through the list as currently filtered and sorted.
+  const at = rows.findIndex((r) => r.id === openId);
+  const go = (i: number) => () => setOpenId(rows[i].id);
 
   // Server runs the deterministic 7-field comparison and returns the updated shipment.
   // Without `fields` it marks the email as read instead.
@@ -286,13 +289,14 @@ export default function Emails() {
 
       {selected && (
         <ReviewModal
-          key={selected.id}
           shipment={selected}
           onClose={() => setOpenId(null)}
           saving={saving}
           onSave={(side, fields) => save(selected, side, fields)}
           onMarkRead={() => save(selected)}
           onToast={showToast}
+          onPrev={at > 0 ? go(at - 1) : undefined}
+          onNext={at >= 0 && at < rows.length - 1 ? go(at + 1) : undefined}
         />
       )}
     </div>
