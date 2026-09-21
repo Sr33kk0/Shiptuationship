@@ -37,6 +37,7 @@ Shiptuationship reads every incoming email, works out what it is, compares the S
 9. [Future roadmap](#9-future-roadmap)
 10. [Setup instructions](#10-setup-instructions)
 11. [Project structure and scripts](#11-project-structure-and-scripts)
+12. [Team and contributions](#12-team-and-contributions)
 
 ---
 
@@ -649,6 +650,16 @@ Shiptuationship
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
 | `npx tsc --noEmit` | Type-check the whole project |
+
+---
+
+## 12. Team and contributions
+
+[@Sr33kk0](https://github.com/Sr33kk0) 
+
+[@DaveTLH](https://github.com/DaveTLH) 
+
+[@JoeLee29](https://github.com/JoeLee29) 
 
 ---
 
