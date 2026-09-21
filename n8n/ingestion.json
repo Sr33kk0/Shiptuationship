@@ -310,6 +310,29 @@
                 },
                 "conditions": [
                   {
+                    "id": "image-condition",
+                    "leftValue": "={{ Object.values($binary ?? {}).some(file => /^image\\//i.test(file.mimeType ?? '')) || /\\.(?:jpe?g|jfif|jpe|png|apng|gif|bmp|dib|webp|tiff?|ico|cur|avif|heic|heif|hif|svg|svgz|raw|dng|cr2|cr3|nef|nrw|arw|sr2|srf|orf|rw2|raf|pef|srw|psd|psb|jxl|jp2|j2k|jpf|jpx|jpm|mj2|jxr|wdp|hdp|tga|pcx|pbm|pgm|ppm|pnm|pam|exr|hdr|dds)$/i.test(String($json.filename ?? Object.values($binary ?? {})[0]?.fileName ?? '')) }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
                     "leftValue": "={{ $json.filename.toLowerCase() }}",
                     "rightValue": ".txt",
                     "operator": {
@@ -668,7 +691,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "throw new Error('Unsupported attachment format. Use TXT, PDF, XLSX or DOCX (.xlsx, not .xlxs).');"
+        "jsCode": "throw new Error('Unsupported attachment format. Use an image, TXT, PDF, XLSX or DOCX (.xlsx, not .xlxs).');"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1013,6 +1036,71 @@
       "id": "540ab628-fb3a-473c-a25e-a391712c8669",
       "name": "Wait 30 Seconds",
       "webhookId": "b6a8da84-07a0-4d36-9e84-65b06bb10957"
+    },
+    {
+      "parameters": {
+        "jsCode": "const key = Object.keys($input.first().binary ?? {})[0];\nif (!key) throw new Error('Image binary missing.');\nconst buffer = await this.helpers.getBinaryDataBuffer(0, key);\nreturn [{ json: { body: { requests: [{ image: { content: buffer.toString('base64') }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }] }] } }, pairedItem: { item: 0 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2768,
+        640
+      ],
+      "id": "d5654566-bcd3-4c99-af5c-a5a791c2824c",
+      "name": "Build Image Vision Request",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://vision.googleapis.com/v1/images:annotate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2528,
+        640
+      ],
+      "id": "021b3174-2828-47ce-b898-580276b41d2c",
+      "name": "Google Vision Image OCR",
+      "notesInFlow": true,
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "i19UyTeoHoAIQPDm",
+          "name": "Google account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "OCR for image attachments. All image MIME types are routed here; formats unsupported by Vision are reported through Prepare Attachment Error. Animated images use the first frame."
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nif (result.error) throw new Error('Google Vision image OCR failed: ' + String(result.error.message ?? result.error));\nif (!Array.isArray(result.responses) || result.responses.length !== 1) throw new Error('Google Vision OCR returned no image result.');\nconst image = result.responses[0];\nif (image.error) throw new Error('Google Vision image OCR failed: ' + String(image.error.message ?? image.error));\nconst text = (image.fullTextAnnotation?.text ?? '').trim();\nif (!text) throw new Error('Google Vision OCR found no readable text in the image.');\nreturn [{ json: { text, ocr: 'google-vision' }, pairedItem: { item: 0 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2288,
+        640
+      ],
+      "id": "5dc4ca36-76c2-4f6b-834b-2b9e03c77937",
+      "name": "Collect Image OCR Text",
+      "onError": "continueErrorOutput"
     }
   ],
   "connections": {
@@ -1224,6 +1312,13 @@
     },
     "File Extension Categorization": {
       "main": [
+        [
+          {
+            "node": "Build Image Vision Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Parse TXT",
@@ -1691,6 +1786,53 @@
         [
           {
             "node": "Find Attachment (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Image Vision Request": {
+      "main": [
+        [
+          {
+            "node": "Google Vision Image OCR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Attachment Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Image OCR Text": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Tag Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Attachment Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vision Image OCR": {
+      "main": [
+        [
+          {
+            "node": "Collect Image OCR Text",
             "type": "main",
             "index": 0
           }
