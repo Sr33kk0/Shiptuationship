@@ -174,17 +174,15 @@ a.card { text-decoration: none; color: inherit; cursor: pointer; }
 /* the read/unread card is twice as wide as the others: two big numbers over a progress bar of how much is read */
 .cards > .wide { flex: 1.5 1 420px; }
 .cards > .cmp-card { flex-basis: 300px; }
-.review-card { gap: 24px; }
-.review-card.needs-attention { background: #fff1f2; border-color: #fda4af; color: #9f1239; }
+.review-card { gap: 24px; border: none; }
+.review-card.needs-attention { color: #ff0000; }
 .review-card.needs-attention .card-title, .review-card.needs-attention .big { color: inherit; }
 .review-summary { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--text-2); max-width: 42ch; }
 .needs-attention .review-summary { color: inherit; }
 .review-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 8px; background: var(--solid); color: var(--on-solid); text-decoration: none; font-size: 14px; line-height: 20px; font-weight: 700; }
-.needs-attention .review-action { background: #9f1239; color: #fff1f2; }
+.needs-attention .review-action { background: #ff0000; color: #fff; }
 .review-action:hover { text-decoration: underline; text-underline-offset: 3px; }
 .review-action:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; outline-color: var(--ink); }
-[data-theme="dark"] .review-card.needs-attention { background: #351c28; border-color: #9f4560; color: #fda4af; }
-[data-theme="dark"] .needs-attention .review-action { background: #fda4af; color: #4c0519; }
 .stats { display: flex; gap: clamp(28px, 6vw, 64px); }
 .stat-label { display: block; margin-top: 2px; font-size: 12px; line-height: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); }
 .progress { margin-top: 14px; height: 12px; border-radius: 9999px; background: var(--track-2); overflow: hidden; }
