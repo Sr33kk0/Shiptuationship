@@ -6,6 +6,7 @@ import { useState } from "react";
 import { CATS, dayKey, fmtDate, fmtTime, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
+import ExportEmails from "./ExportEmails";
 import { Icon } from "./Icon";
 import Profile from "./Profile";
 import ReviewModal from "./ReviewModal";
@@ -146,6 +147,7 @@ export default function Emails() {
             </div>
 
             <DateRangePicker value={range} onChange={setRange} />
+            <ExportEmails rows={rows} disabled={loadState !== "ready" || saving || rows.length === 0} />
           </div>
 
           <div className="filters">
