@@ -9,7 +9,7 @@
 **From a noisy shipping inbox to a clear discrepancy report.**
 Shiptuationship reads every incoming email, works out what it is, compares the Shipping Instruction (SI) against the draft Bill of Lading (BL) on seven fields, and hands anything uncertain to a human reviewer, with the evidence attached.
 
-*Built for the **Averis Hackathon 2026**.*
+*Built for the **Averis x Monash Hackathon 2026**.*
 
 </div>
 
@@ -93,10 +93,10 @@ Success is measured by finding the **right requests** and the **right discrepanc
 | Compare and show SI vs BL side by side | **Deterministic** (non-LLM) comparison, then a side-by-side review screen. | n8n *Compare Fields* + web app *ReviewModal* |
 | Real discrepancy vs formatting difference | Normalisation and a formatting/real/severity classification. Formatting-only differences are recorded but not flagged. | n8n *Compare Fields* |
 | Human in the loop | Flagged and incomplete cases are queued for a moderator who can edit either document's values, save, and re-run the comparison. | Web app *Emails* page |
-| Visible failures and retries | Per-email queue with `queued → processing → done / failed`, `last_error` recorded, one-line manual retry. | n8n `ingestion-drain` |
+| Visible failures and retries | Per-email queue with `queued → processing → done / failed`, `last_error` recorded. A missing attachment auto-retries for 3 minutes inside `ingestion`; a `failed` queue row still needs a manual retry. | n8n `ingestion-drain` |
 | "Which email, mismatch or not, what needs attention" | Dashboard, filterable email table, per-email discrepancy banner, audit logs. | Web app |
 
-> **Not attempted in this version:** scanned or image-only PDFs (OCR / vision). See [Known limitations](#7-known-limitations) and the [roadmap](#8-future-roadmap).
+> **Scanned or image-only PDFs** get a Google Vision OCR fallback (see [5.3](#53-attachment-handling-and-field-extraction)); a scanned DOCX or a standalone image attachment does not, and still surfaces as an attachment error for a human. See [Known limitations](#7-known-limitations) and the [roadmap](#8-future-roadmap).
 
 ---
 
@@ -104,21 +104,21 @@ Success is measured by finding the **right requests** and the **right discrepanc
 
 Shiptuationship has **two halves** that share one database:
 
-- **An automated back end (n8n + a local LLM)** that watches a Google Drive inbox, classifies every email, extracts the seven fields from the SI and BL attachments, runs the comparison and writes the result to **Firestore**.
+- **An automated back end (n8n + Google Vertex AI)** that watches a Google Drive inbox, classifies every email, extracts the seven fields from the SI and BL attachments, runs the comparison and writes the result to **Firestore**.
 - **A web app (Next.js)**, the *AI Logistics Assistant*, with a public front page and a logged-in desk where an operator sees everything at a glance, reviews flagged emails side by side, corrects values, marks emails as read, and audits what both the automation and the humans did.
 
 ### Feature tour
 
 | Area | What you get |
 |------|--------------|
-| **Front page and login** | A product-style front page at `/` (always light, sections fade in as you scroll where the browser supports it). **Log in** signs in as the preset moderator and opens `/dashboard`. Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. A demo sign-in, not real authentication (see [Known limitations](#7-known-limitations)). |
+| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** signs in as the preset moderator and opens `/dashboard`. Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. A demo sign-in, not real authentication (see [Known limitations](#7-known-limitations)). |
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
-| **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel and then an editable, copyable reply box; the text itself is not generated yet (see limitations). On phones the *Human review required* reasons fold away behind a chevron. |
+| **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box (not yet included in **Print**, see limitations). On phones the *Human review required* reasons fold away behind a chevron. |
 | **User Log** | A chronological audit feed of every **moderator action** (reviews saved, emails marked read), with before/after field changes you can expand. |
 | **System Log** | The same feed for everything the automation did (classified, auto-compared), shown as **Ship AI** with the Shiptuationship logo as its avatar. |
-| **Settings** | Five colour schemes for the app: Light, Dark (true black), Ocean, Forest and Sunset. The front page ignores them and is always light. |
-| **Everywhere** | Fully responsive (drawer menu on phones, cards instead of tables), animated but respects *reduced motion*, refreshes from Firestore every 30 s. |
+| **Settings**  | Five colour schemes for the app: Light, Dark (true black), Ocean, Forest and Sunset. The front page ignores them and is always light. |
+| **Everywhere** | Fully responsive (drawer menu on phones, cards instead of tables), animated but respects *reduced motion*, refreshes from Firestore every 30 seconds. |
 
 ---
 
@@ -129,14 +129,17 @@ Shiptuationship has **two halves** that share one database:
 ```mermaid
 flowchart LR
     subgraph SRC["Sources"]
+        GMAIL[("Gmail<br/>+ship label")]
         DRIVE[("Google Drive<br/>/inbox (email JSON)<br/>/attachments (SI, BL files)")]
     end
 
     subgraph N8N["n8n - automation"]
+        G2D["gmail-ship-to-drive<br/>every 1 min, optional"]
         TRIG["ingestion-trigger<br/>every 1 min"]
         DRAIN["ingestion-drain<br/>every 1 min"]
         ING["ingestion<br/>classify, extract, compare"]
-        LLM(["Ollama<br/>qwen3.5:9b"])
+        AR["auto-reply<br/>webhook, on demand"]
+        LLM(["Google Vertex AI<br/>gemini-3.5-flash-lite"])
     end
 
     subgraph DB["Firestore (project: hokkien)"]
@@ -147,10 +150,12 @@ flowchart LR
     end
 
     subgraph WEB["Next.js web app"]
-        API["Route handlers<br/>/api/emails · /api/audit"]
+        API["Route handlers<br/>/api/emails · /api/audit · /api/auto-reply"]
         UI["Front page · Dashboard · Emails · Review<br/>User Log · System Log · Settings"]
     end
 
+    GMAIL -->|poll, label filter| G2D
+    G2D -->|upload manifest + attachments| DRIVE
     DRIVE -->|files.list, capped at 20| TRIG
     TRIG -->|enqueue| Q
     Q -->|claim 1 at a time| DRAIN
@@ -161,22 +166,25 @@ flowchart LR
     API <-->|REST + OAuth2 refresh token| E
     API --> ACT
     API --> MOD
+    API -->|POST email + comparison| AR
+    AR <-->|prompt| LLM
     UI <-->|fetch, 30 s poll| API
 ```
 
 ### 3.2 End-to-end flow of one email
 
-1. **A file lands in the Drive `/inbox` folder** (an email in JSON form).
-2. **`ingestion-trigger`** (every minute) asks Drive for the 20 oldest files at or after its cursor and writes one small **queue row** per file to Firestore (`status: queued`).
-3. **`ingestion-drain`** (every minute) claims queued rows **one at a time** (`processing`) and runs the `ingestion` sub-workflow for each.
-4. **`ingestion`** does the real work:
+1. **(Optional) `gmail-ship-to-drive`** (every minute) polls Gmail for mail sent to the `+ship` address that isn't yet labelled `ship-exported`, uploads its attachments and a JSON manifest to the Drive `/attachments` and `/inbox` folders (manifest last, so a file is only ever seen once it's complete), then labels the message so it isn't re-read. Skip this step if files are dropped into Drive by hand instead.
+2. **A file lands in the Drive `/inbox` folder** (an email in JSON form).
+3. **`ingestion-trigger`** (every minute) asks Drive for the 20 oldest files at or after its cursor and writes one small **queue row** per file to Firestore (`status: queued`).
+4. **`ingestion-drain`** (every minute) claims queued rows **one at a time** (`processing`) and runs the `ingestion` sub-workflow for each.
+5. **`ingestion`** does the real work:
    1. Parses the email JSON and **classifies** it (LLM, strict JSON, validated).
    2. Logs the email to Firestore (`emails/{email_id}`) with its classification.
-   3. For **Document-Comparison Requests**: finds each attachment in Drive, parses it by type (TXT / PDF / XLSX / DOCX), asks the LLM to **extract the 7 fields** and to say whether it is an **SI or a BL**, then stores the result under `si` and `bl`.
+   3. For **Document-Comparison Requests**: finds each attachment in Drive (a missing file is retried for up to 3 minutes before failing), parses it by type (TXT / PDF / XLSX / DOCX), sends a scanned PDF through **Google Vision OCR** if it has too little extracted text, asks the LLM to **extract the 7 fields** and to say whether it is an **SI or a BL**, then stores the result under `si` and `bl`.
    4. Runs a **deterministic comparison** in code and writes `comparison`, `status` (`cleared` / `flagged` / `incomplete`) and `human_review_required`.
-5. The queue row is marked `done` or `failed` (with `last_error`).
-6. **The web app** reads `emails` through its own API routes. An operator opens a flagged email, sees the SI and BL side by side, corrects a value if the extraction was wrong, and saves.
-7. The save is written as a **moderator override** (never touching what n8n wrote), the comparison is re-run, and an **activity record** is added, which feeds the **User Log**. The n8n side feeds the **System Log**.
+6. The queue row is marked `done` or `failed` (with `last_error`).
+7. **The web app** reads `emails` through its own API routes. An operator opens a flagged email, sees the SI and BL side by side, corrects a value if the extraction was wrong, and saves.
+8. The save is written as a **moderator override** (never touching what n8n wrote), the comparison is re-run, and an **activity record** is added, which feeds the **User Log**. The n8n side feeds the **System Log**.
 
 ### 3.3 Technology stack
 
@@ -189,8 +197,8 @@ flowchart LR
 | Access gate (demo) | A session cookie plus Next.js **`proxy.ts`** | Keeps logged-out visitors on the front page and off the data API. Not real authentication |
 | Database | **Google Cloud Firestore** via its **REST API** | Single source of truth |
 | Auth to Firestore | **Google OAuth2 refresh token** (same model as the n8n credential) | No service account, no Firebase SDK |
-| Automation | **n8n** (3 exported workflows in [`n8n/`](n8n)) | Ingestion, orchestration, comparison |
-| AI | **Ollama** running **`qwen3.5:9b`** | Classification and field extraction |
+| Automation | **n8n** (5 exported workflows in [`n8n/`](n8n)) | Gmail intake, ingestion, orchestration, comparison, auto-reply |
+| AI | **Google Vertex AI**, model **`gemini-3.5-flash-lite`** | Classification, field extraction and auto-reply drafting |
 | File storage | **Google Drive** | Dataset: `/inbox` emails and `/attachments` SI/BL files |
 | Comparison | **JavaScript (n8n Code node)**, deterministic | 7-field comparison with normalisation |
 
@@ -201,7 +209,7 @@ flowchart LR
 
 | Field | Written by | Meaning |
 |-------|-----------|---------|
-| `email_id`, `subject`, `body`, `from`, `to`, `received_at` | n8n | Original email record. (`received_at` is empty in the sample data, so the UI uses `classified_at`.) |
+| `email_id`, `subject`, `body`, `from`, `to`, `received_at` | n8n | Original email record. `received_at` is populated when `gmail-ship-to-drive` supplies the manifest, but is empty in the hackathon's static sample data; either way, the UI displays `classified_at`. |
 | `attachments[]`, `attachment_count` | n8n | Attachment file names |
 | `classification` | n8n | One of the 5 categories |
 | `classified_at` | n8n | When the automation processed it. This is the date shown in the app |
@@ -246,15 +254,16 @@ Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (confl
 
 ### 4.1 Prerequisites
 
-| Need | Version / note |
-|------|----------------|
-| **Node.js** | 20.9 or newer (the team develops on Node 24) |
-| **npm** | Comes with Node |
-| **Google Cloud project with Firestore** | Project id defaults to `hokkien`. Override with `FIRESTORE_PROJECT_ID` |
-| **A Google OAuth client** | The same client n8n's Firestore credential uses is fine |
-| **n8n** | For the ingestion pipeline (only needed if you want to *produce* data, not just view it) |
-| **Ollama with `qwen3.5:9b`** | `ollama pull qwen3.5:9b`. Reachable from n8n |
-| **Google Drive folder** | Structure below |
+| Need | Version / note | Needed for |
+|------|----------------|------------|
+| **Node.js** | 20.9 or newer (the team develops on Node 24) | Web app |
+| **npm** | Comes with Node | Web app |
+| **Google Cloud project with Firestore** | Database. Override the project id with `FIRESTORE_PROJECT_ID` | Web app + n8n |
+| **A Google OAuth client** | Refresh token needs the `https://www.googleapis.com/auth/datastore` scope. The same client n8n's Firestore credential uses is fine | Web app + n8n |
+| **n8n** | Runs the ingestion pipeline (only needed to *produce* data, not just view it) and the on-demand `auto-reply` workflow (needed if you want **Generate auto reply** to work) | Ingestion (optional) / auto-reply (optional) |
+| **Google Cloud Vertex AI access** | A Google Service Account with Vertex AI access, used by the `ingestion` and `auto-reply` LLM nodes (model `gemini-3.5-flash-lite`) | Ingestion pipeline (optional) |
+| **Google Drive folder** | Structure below | Ingestion pipeline (optional) |
+| **Gmail account with a `+ship` alias** | Only if using the optional `gmail-ship-to-drive` intake workflow instead of dropping files into Drive by hand | Ingestion pipeline (optional) |
 
 Dataset layout in Google Drive:
 
@@ -294,9 +303,9 @@ Type-check only: `npx tsc --noEmit`
 | `GOOGLE_CLIENT_ID` | yes | OAuth client id |
 | `GOOGLE_CLIENT_SECRET` | yes | OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | yes | Refresh token granted with scope `https://www.googleapis.com/auth/datastore` |
-| `FIRESTORE_PROJECT_ID` | no | Defaults to `hokkien` |
+| `FIRESTORE_PROJECT_ID` | yes | Firestore project ID |
 | `N8N_AUTO_REPLY_WEBHOOK_URL` | yes, for auto replies | Production URL of the active n8n `auto-reply` webhook |
-| `NEXT_PUBLIC_SITE_URL` | no | Public address of the deployed site. Used for link previews (Open Graph). Defaults to `http://localhost:3000` |
+| `NEXT_PUBLIC_SITE_URL` | no | Public address of the deployed site. Used for link previews (Open Graph). Defaults to `http://localhost:3000`. Not listed in [`.env.example`](.env.example) since it's optional; add it yourself in `.env.local` if you're deploying somewhere other than `localhost:3000` |
 
 > **Never commit `.env.local`.** It is already listed in `.gitignore`. Keep secrets out of screenshots, issues and commits.
 
@@ -312,21 +321,23 @@ Type-check only: `npx tsc --noEmit`
 
 ### 4.5 Set up the ingestion pipeline (n8n)
 
-1. **Import** the four files from [`n8n/`](n8n): `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`, and `auto-reply.json`.
+1. **Import** the five files from [`n8n/`](n8n): `gmail-ship-to-drive.json`, `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`, and `auto-reply.json`.
 2. **Create credentials** in n8n:
 
    | Credential | Used by |
    |------------|---------|
-   | Google Drive OAuth2 | Trigger (list files), `ingestion` (download email and attachments) |
-   | Google Firebase Cloud Firestore OAuth2 | All three workflows |
-   | Google Service Account with Vertex AI access | `ingestion` and `auto-reply` LLM nodes |
+   | Gmail OAuth2 | `gmail-ship-to-drive` (read `+ship`-tagged mail) |
+   | Google Drive OAuth2 | `gmail-ship-to-drive` (upload manifest + attachments), `ingestion-trigger` (list files), `ingestion` (download email and attachments) |
+   | Google Firebase Cloud Firestore OAuth2 | `ingestion-trigger`, `ingestion-drain`, `ingestion` |
+   | Google Service Account with Vertex AI access | `ingestion` and `auto-reply` LLM nodes (`gemini-3.5-flash-lite`) |
 
 3. In `ingestion-drain`, open the **Ingest Email** node and **re-select the `ingestion` workflow** (the export does not carry the workflow id).
 4. Point the Drive nodes at **your** `/inbox` and `/attachments` folders.
-5. In `auto-reply`, select your Google Vertex credential and project on the **Google Vertex Chat Model** node, then activate the workflow.
-6. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL` and restart the web app.
-7. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
-8. Drop email JSON files into the Drive `/inbox` folder. Within a minute or two they appear in Firestore, then in the app. The auto-reply workflow runs only when a moderator clicks **Generate auto reply**.
+5. **Optional — Gmail intake:** in `gmail-ship-to-drive`, select your Gmail and Drive credentials, run it once manually (it creates the `ship-exported` label automatically), check Drive for the uploaded files, then activate it. Skip this workflow if you'd rather drop files into Drive by hand.
+6. In `auto-reply`, select your Google Vertex credential and project on the **Google Vertex Chat Model** node, then activate the workflow.
+7. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL` and restart the web app.
+8. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
+9. Drop email JSON files into the Drive `/inbox` folder, by hand or via `gmail-ship-to-drive`. Within a minute or two they appear in Firestore, then in the app. The auto-reply workflow runs only when a moderator clicks **Generate auto reply**.
 
 **Self-hosted n8n (Docker) tuning**, recommended for large PDF/XLSX files:
 
@@ -367,19 +378,21 @@ NODE_OPTIONS=--max-old-space-size=4096       # bigger heap (give the container a
 
 ### 5.1 Ingestion workflows (n8n)
 
-Three workflows are exported in [`n8n/`](n8n):
+Five workflows are exported in [`n8n/`](n8n):
 
 | Workflow | Role | Memory per execution |
 |----------|------|----------------------|
+| **`gmail-ship-to-drive`** | Schedule (1 min), optional. Polls Gmail for unlabelled `+ship` mail, uploads each message's attachments and a JSON manifest to Drive, then labels the message `ship-exported` so it is not re-read | one email |
 | **`ingestion-trigger`** | Schedule (1 min). Cursor = newest `created_time` in `ingestion_queue`. Asks Drive for the **20 oldest** files at or after it and writes one small queue document per file. Never runs the heavy workflow itself | ≤ 20 × 3 fields |
 | **`ingestion-drain`** | Schedule (1 min). Exits if another drain is still running, re-queues rows stuck in `processing`, reads ≤ 20 `queued` rows and loops them **one at a time**: claim → `ingestion` → mark `done` / `failed` | ≤ 20 sub-results, one email in flight |
-| **`ingestion`** | The actual pipeline for one email (34 nodes) | one email |
+| **`ingestion`** | The actual pipeline for one email (45 nodes) | one email |
+| **`auto-reply`** | Webhook, on demand. Called from `/api/auto-reply` with an email and its comparison result, drafts a reply with Gemini and returns it | one reply |
 
 **Why the queue?** The native Google Drive Trigger has no limit: a 250-file drop would land in a single execution and hold 250 sub-workflow results in one heap. A capped `files.list` plus a Firestore queue means every run is bounded (20 files), retryable and visible.
 
 ### 5.2 Classification
 
-A local LLM (`qwen3.5:9b`, "no-think" mode) returns **exactly one** JSON classification. The prompt is hardened for messy real-world inputs:
+An LLM (Google Vertex AI, `gemini-3.5-flash-lite`) returns **exactly one** JSON classification. The prompt is hardened for messy real-world inputs:
 
 - The email is treated as **untrusted data**. Instructions inside it are never followed (prompt-injection guard).
 - **Classify by the body, not the subject.** Subjects can be forwarded, re-used or misleading. The subject is only a tiebreaker.
@@ -392,31 +405,43 @@ A code node then **validates** the answer against the five allowed values. If th
 
 For each attachment of a comparison request:
 
-1. **Find** it in the Drive `/attachments` folder. Zero matches or more than one match is a recorded error (`Attachment not found` / `ambiguous`), not a guess.
+1. **Find** it in the Drive `/attachments` folder. Zero matches is retried for up to 3 minutes (six 30 s attempts, in case the upload is still in flight), then recorded as an error; more than one match is a recorded `ambiguous` error. Neither case is guessed.
 2. **Parse by type:** `.txt` (text), `.pdf` (text extraction), `.xlsx` (rows are combined into text), `.docx` (unzipped and read). Unsupported types are logged as an attachment error.
-3. **Extract** with the LLM into strict JSON. The prompt covers:
+3. **OCR fallback for scanned PDFs.** If a parsed PDF averages under 50 characters of text per page, it's treated as image-only and sent to **Google Cloud Vision** (`files:annotate`, batched 5 pages per request) to OCR every page. A failed or partial OCR result fails the attachment rather than returning incomplete text. This does not cover scanned DOCX files or standalone image attachments, which are logged as unsupported.
+4. **Extract** with the LLM into strict JSON. The prompt covers:
    - **Document type detection** (`BL`, `SI` or `UNKNOWN`) from the document's own content. The filename is only a hint, so a mislabelled file is not assumed to be a BL.
    - **Label aliases** for every field (for example `SHPR`, `EXPORTER`; `CNEE`, `TO ORDER OF`; `NTFY`; `POL`, `LOAD PORT`; `POD`, `DEST`; `CNTR`; `G.W.`, `WGT`), which addresses the "Port of Loading vs Load Port" problem.
    - **Names only:** stop before street addresses, phone numbers and tax ids. "To Order" is a label, not a name.
    - **Numbers made comparable:** container counts are summed (`2 x 20', 1 x 40'` → 3). Weights are converted to kg (lbs × 0.453592, MT × 1000) with thousands separators stripped.
    - **Never invent:** a field that is genuinely absent is `null`.
-4. **Validate before storing.** A code node checks the LLM's JSON: the document type must be `BL` or `SI`, text fields must be strings or `null`, the container count must be a whole number, the weight a non-negative number. An extraction that contains none of the seven fields is **rejected** rather than allowed to overwrite stored data.
-5. Store the result under `si` / `bl` with the source file recorded (`filename`, `drive_file_id`). This version keeps **one SI and one BL per email**.
+5. **Validate before storing.** A code node checks the LLM's JSON: the document type must be `BL` or `SI`, text fields must be strings or `null`, the container count must be a whole number, the weight a non-negative number. An extraction that contains none of the seven fields is **rejected** rather than allowed to overwrite stored data.
+6. Store the result under `si` / `bl` with the source file recorded (`filename`, `drive_file_id`). This version keeps **one SI and one BL per email**.
 
 ### 5.3.1 Comparison (deterministic, no LLM)
 
-Comparing is deliberately **plain code**, so the same input always gives the same answer:
+Comparing is deliberately **plain code**, so the same input always gives the same answer. Each of the seven fields is normalised on both sides, then compared:
 
 | Rule | Behaviour |
 |------|-----------|
-| Both values missing | Counts as a match |
-| One value missing | **Discrepancy**, severity `major` |
+| A value recognised as blank (`N/A`, `NULL`, `NONE`, `NIL`, `TBA`, `TBD`, `UNKNOWN`, `NOT PROVIDED`, or a bare unit like `KG`) | Treated as **missing**, not blank text |
+| Either value missing (one side or both) | **Discrepancy**, severity `major` — two blank fields do **not** count as a match |
 | Container count | Must be **exactly equal** |
-| Gross weight | Equal within **0.5 %** |
-| Text fields | If equal ignoring case: match. Otherwise both are **normalised** (upper-case, punctuation and dots removed, bracketed port codes like `(MYPKG)` removed, trailing country dropped for ports, `TO ORDER` prefixes unified, extra spaces collapsed) |
-| After normalising | **Equal → formatting difference:** recorded in `formatting_notes`, **not flagged** (avoids false alarms). One string inside the other → `real` / `minor`. Otherwise → `real` / `major` |
+| Gross weight | Equal within an **absolute ~0.001 kg** allowance for floating-point rounding — effectively exact, not a percentage tolerance |
+| Port of Loading / Port of Discharge | Both sides must independently pass **UN/LOCODE validation** (see [5.3.2](#532-port-code-validation-unlocode)) *and* their validated names must match |
+| Other text fields (Shipper, Consignee, Notify Party) | Both sides normalised: Unicode-folded, upper-cased, punctuation stripped, legal-entity suffixes unified (`Limited`→`LTD`, `Incorporated`→`INC`, `Corporation`→`CORP`, `Sendirian Berhad`→`SDN BHD`, `Private`/`Proprietary (Limited)`→`PTE`/`PTY`, `Company (Limited)`→`CO`). `Notify Party` values like `SAME AS CONSIGNEE` resolve to the actual consignee before comparing. `TO ORDER (OF)` is stripped from Consignee |
+| After normalising | **Equal → formatting difference:** recorded in `formatting_notes`, **not flagged** (avoids false alarms). **Not equal → real discrepancy, severity always `major`** (there is no "minor" tier) |
 
-Result: `comparison.status` is **`flagged`** if any real discrepancy exists, otherwise **`cleared`**, and `human_review_required` is set to match. If the SI or BL side could not be extracted at all, the status is **`incomplete`** and the case is routed to a human.
+Result: `comparison.status` is **`flagged`** if any real discrepancy exists, otherwise **`cleared`**, and `human_review_required` is set to match. If the SI or BL side could not be extracted at all — or a port failed UN/LOCODE validation — the status is **`incomplete`** / **`needs_review`** and the case is routed to a human.
+
+### 5.3.2 Port code validation (UN/LOCODE)
+
+Port of Loading and Port of Discharge get their own validation step, separate from the rest of the comparison, in a dedicated `Check Port Code` node that embeds a full **UN/LOCODE dataset** (~4.7 MB, generated offline via `n8n/embed-locodes.py`, no network or filesystem access at runtime):
+
+- Reads a bracketed code first (`Port Klang (MYPKG)`), then a bare trailing code, then falls back to matching the location name (with an optional country/subdivision suffix) against the dataset.
+- Recognises country names and common aliases (`USA`, `UAE`, `UK`, `PRC`, ...) to disambiguate a location that matches more than one LOCODE.
+- Every result gets a `status`: `valid` (name and code agree), `added` (a unique code was resolved from the name alone), `mismatch` (code and name disagree), `ambiguous` (matches more than one LOCODE), `unknown_code` / `unknown_location`, or `missing`.
+- On `valid`/`added`, the stored `port_of_loading` / `port_of_discharge` value is **rewritten** to a canonical `"Name, Country (CODE)"` form before it's saved — so what ends up in `si`/`bl` isn't always the extractor's raw text.
+- `Compare Fields` requires **both** sides to be `valid` or `added` before a port field can match at all; any other status fails that field and adds a specific reason (e.g. *"BL - Port of Loading: 'X' matches 2 UN/LOCODEs..."*) to `human_review_reasons`.
 
 ### 5.4 Human in the loop (the web app)
 
@@ -477,10 +502,10 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 | Challenge | What happened | How we solved it |
 |-----------|---------------|------------------|
 | **The same field, written many ways** | `POL`, `Load Port`, `Port/Place of Loading`, `SHPR`, `To Order of`… | An explicit alias table in the extraction prompt, plus post-extraction **normalisation** so `PORT KLANG (MYPKG)` and `Port Klang` still match |
-| **Real discrepancy or just formatting?** | Comparing raw strings raised false alarms on punctuation, casing, port codes and country suffixes | A deterministic comparison with normalisation, a 0.5 % weight tolerance, and a `formatting` vs `real` (`minor` / `major`) classification. Formatting-only differences are logged but not flagged |
+| **Real discrepancy or just formatting?** | Comparing raw strings raised false alarms on punctuation, casing, port codes and country suffixes | A deterministic comparison with normalisation, and a `formatting` vs `real` (`minor` / `major`) classification. Formatting-only differences are logged but not flagged |
 | **Misleading subjects and prompt injection** | Subjects can be reused or forwarded. Bodies can contain instructions | Classify by **body**, treat all text as untrusted, validate the output against the five allowed categories |
 | **Mixed attachment formats** | TXT, PDF, XLSX and DOCX each need different parsing | Type-based routing, DOCX unzip and text read, Excel row merging, and explicit errors for unsupported or missing or ambiguous files |
-| **LLM variability** | Small local models can return malformed JSON | Strict "JSON only" prompts, a validator with a safe fallback (`Other` + `needs_review`), and **no LLM in the comparison** |
+| **LLM variability** | LLMs can return malformed JSON | Strict "JSON only" prompts, a validator with a safe fallback (`Other` + `needs_review`), and **no LLM in the comparison** |
 | **n8n running out of memory on large drops** | The Drive Trigger returns *every* new file, so a 250-file drop held 250 results in one heap and crashed the LLM step | Replaced it with a **capped queue** (20 files per run), a single-drain **gate**, stale-row recovery, filesystem binary mode and a bigger heap |
 | **Never lose or double-process an email** | Retries, crashes and re-uploads | Create-only enqueue, atomic claims, stale re-queue after 15 min, and file-id (not `email_id`) as the dedupe key |
 | **Human edits vs the automation's data** | A re-ingestion could overwrite a moderator's correction | Human corrections live in a separate `review.*` namespace with a nested field mask, so neither side clobbers the other |
@@ -496,16 +521,16 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 
 Being honest about what this version does **not** do yet:
 
-- **No OCR or vision.** Image-only or scanned PDFs are not read. PDF handling is text extraction, so those cases surface as errors or incomplete comparisons for a human.
+- **OCR covers PDFs only.** Image-only or scanned PDFs go through Google Vision OCR, but a scanned DOCX or a standalone image attachment still surfaces as an unsupported-attachment error for a human, rather than being OCR'd.
 - **Two comparison rules.** The pipeline compares **normalised** values (formatting differences are tolerated). The web app's live highlight and re-comparison on save uses **exact** text equality on the seven fields, so it can flag a formatting-only difference that n8n deliberately ignored.
 - **`incomplete` and `needs_review` are not yet surfaced.** They are stored (with `human_review_required`) but the inbox shows them as "Received"; only `flagged` and `cleared` get their own view.
 - **No real login.** The front page's **Log in** and the profile menu's **Log out** only set and clear a demo session cookie. All moderator actions are attributed to one preset identity (`DanielHo`).
 - **Attachment links only for the SI and BL files.** n8n stores a `drive_link` only for the two files it extracts from, so other attachments show as plain names.
-- **Auto reply is UI only.** *Generate auto reply* shows the loading state and an empty, editable, copyable box; no LLM is connected, so no text is generated, and the printout does not include a reply.
+- **Auto reply isn't in the print-out.** *Generate auto reply* calls the n8n `auto-reply` workflow and returns a real Gemini-drafted reply into an editable, copyable box, but there is no send action and **Print** does not include the reply yet.
 - **Polling, not push.** The UI refreshes every 30 s rather than streaming Firestore changes.
 - **Limits of scale.** The email list reads one page (up to 300 documents) and the User Log one page (up to 500 activity records). The Drive trigger enqueues 20 files per minute and the drain is deliberately serial.
-- **Retry is manual.** A `failed` queue row must be set back to `queued` in Firestore.
-- **Local LLM quality.** Accuracy depends on `qwen3.5:9b`. There is no second-opinion model or confidence score yet.
+- **Queue-level retry is manual.** A missing attachment auto-retries for 3 minutes inside `ingestion`, but a `failed` queue row (any other error) must be set back to `queued` in Firestore by hand.
+- **Model quality.** Accuracy depends on `gemini-3.5-flash-lite`. There is no second-opinion model or confidence score yet.
 - **No automated test suite** is included in this repository yet.
 
 ---
@@ -513,7 +538,7 @@ Being honest about what this version does **not** do yet:
 ## 8. Future roadmap
 
 ### Near term (accuracy and reliability)
-- [ ] **OCR and vision-LLM fallback** for scanned and image-only PDFs.
+- [ ] **Extend OCR** to scanned DOCX files and standalone image attachments (Vision OCR currently covers PDFs only).
 - [ ] **One shared comparison module** used by both n8n and the web app, so the highlight and the pipeline can never disagree.
 - [ ] **Confidence scores and evidence:** store the source text snippet per extracted field and route *low-confidence* fields to review, not only mismatches.
 - [ ] **One-click retry** for failed queue rows from the UI, with the failure reason shown.
@@ -524,7 +549,7 @@ Being honest about what this version does **not** do yet:
 - [ ] **Realtime updates** with Firestore listeners or server-sent events instead of polling.
 - [ ] **Notifications** (email or chat) when a comparison is flagged or a job fails.
 - [ ] **Assignments and SLAs:** assign a review to a person, track time-to-resolution.
-- [ ] **Generate the auto reply** with an LLM from the email and its comparison result.
+- [ ] **Send or include the auto-reply** in the print-out and audit trail (currently generate-and-copy only).
 - [ ] **A Drive link for every attachment** (not just the SI and BL) so each one can be opened from the email.
 - [ ] **In-app PDF viewer** of the original attachments beside the extracted fields, and export a **discrepancy report** (PDF or CSV).
 - [ ] **Pagination and search server-side** for large inboxes and long audit histories.
@@ -562,7 +587,7 @@ Being honest about what this version does **not** do yet:
 │  ├─ audit.ts · theme.ts      Log types (and the "Ship AI" bot name) and colour scheme registry
 │  └─ ports.ts · top.ts · …    Port → country mapping, top-N, hooks
 ├─ proxy.ts                    Session gate: app pages and /api/* need the demo session
-├─ n8n/                        ingestion.json · ingestion-trigger.json · ingestion-drain.json · auto-reply.json
+├─ n8n/                        gmail-ship-to-drive.json · ingestion.json · ingestion-trigger.json · ingestion-drain.json · auto-reply.json
 ├─ public/shiplogo.svg         Logo (vectorised)
 ├─ public/opengraph.png        Link preview image (1200×630)
 ├─ .env.example                Environment template
