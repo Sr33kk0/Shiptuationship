@@ -483,17 +483,12 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 
 Being honest about what this version does **not** do yet:
 
-- **OCR covers PDFs only.** Image-only or scanned PDFs go through Google Vision OCR, but a scanned DOCX or a standalone image attachment still surfaces as an unsupported-attachment error for a human, rather than being OCR'd.
 - **Two comparison rules.** The pipeline compares **normalised** values (formatting differences are tolerated). The web app's live highlight and re-comparison on save uses **exact** text equality on the seven fields, so it can flag a formatting-only difference that n8n deliberately ignored.
 - **`incomplete` and `needs_review` are not yet surfaced.** They are stored (with `human_review_required`) but the inbox shows them as "Received"; only `flagged` and `cleared` get their own view.
-- **No real login.** The front page's **Log in** and the profile menu's **Log out** only set and clear a demo session cookie. All moderator actions are attributed to one preset identity (`DanielHo`).
 - **Attachment links only for the SI and BL files.** n8n stores a `drive_link` only for the two files it extracts from, so other attachments show as plain names.
-- **Auto reply isn't in the print-out.** *Generate auto reply* calls the n8n `auto-reply` workflow and returns a real Gemini-drafted reply into an editable, copyable box, but there is no send action and **Print** does not include the reply yet.
-- **Polling, not push.** The UI refreshes every 30 s rather than streaming Firestore changes.
-- **Limits of scale.** The email list reads one page (up to 300 documents) and the User Log one page (up to 500 activity records). The Drive trigger enqueues 20 files per minute and the drain is deliberately serial.
+- **Limits of scale.** Emails and audit records now read every Firestore result batch and the UI paginates them at 25, 50 or 100 rows, but filtering and pagination are still client-side. The Drive trigger enqueues 20 files per minute and the drain is deliberately serial.
 - **Queue-level retry is manual.** A missing attachment auto-retries for 3 minutes inside `ingestion`, but a `failed` queue row (any other error) must be set back to `queued` in Firestore by hand.
 - **Model quality.** Accuracy depends on `gemini-3.5-flash-lite`. There is no second-opinion model or confidence score yet.
-- **No automated test suite** is included in this repository yet.
 
 ---
 

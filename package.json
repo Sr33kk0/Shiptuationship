@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test": "node --test lib/*.test.cjs",
     "start": "next start"
   },
   "dependencies": {

@@ -1,10 +1,12 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BOT_NAME, KINDS, SOURCES, type AuditEvent, type AuditSource } from "@/lib/audit";
+import { paginate } from "@/lib/pagination";
 import FilterMenu, { type FilterOption } from "./FilterMenu";
 import { Icon } from "./Icon";
+import Pagination from "./Pagination";
 import Profile from "./Profile";
 
 const p2 = (n: number) => String(n).padStart(2, "0");
@@ -52,6 +54,9 @@ export default function AuditLog({ source }: { source: AuditSource }) {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const list = useRef<HTMLDivElement>(null);
 
   // Same idea as the Emails page: fetch once, then poll, so new activity shows up without a reload.
   useEffect(() => {
@@ -97,6 +102,13 @@ export default function AuditLog({ source }: { source: AuditSource }) {
   ];
 
   const rows = events.filter((e) => (!action || e.kind === action) && (!user || e.actor === user));
+  const paged = paginate(rows, page, limit);
+
+  useEffect(() => setPage(1), [source, action, user]);
+  const goToPage = (next: number) => {
+    setPage(next);
+    list.current?.scrollTo({ top: 0 });
+  };
 
   const toggle = (id: string) =>
     setOpen((s) => {
@@ -126,7 +138,7 @@ export default function AuditLog({ source }: { source: AuditSource }) {
           </div>
         </div>
 
-        <div className="table-wrap">
+        <div className="table-wrap" ref={list}>
           <ol className="log" key={`${source}|${action}|${user}`}>
             {state === "loading" &&
               Array.from({ length: 7 }, (_, i) => (
@@ -140,7 +152,7 @@ export default function AuditLog({ source }: { source: AuditSource }) {
               ))}
             {state === "error" && <li className="log-empty">Could not load the audit log from Firestore.</li>}
             {state === "ready" && rows.length === 0 && <li className="log-empty">No log entries match your filters.</li>}
-            {rows.map((e, i) => {
+            {paged.items.map((e, i) => {
               const day = dayOf(e.at);
               const divider = day !== lastDay ? ((lastDay = day), true) : false;
               const kind = KINDS[e.kind];
@@ -195,6 +207,7 @@ export default function AuditLog({ source }: { source: AuditSource }) {
             })}
           </ol>
         </div>
+        <Pagination {...paged} total={rows.length} limit={limit} onPage={goToPage} onLimit={(size) => { setLimit(size); goToPage(1); }} />
       </section>
     </div>
   );
