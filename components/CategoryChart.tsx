@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { CATS, type Category, type Shipment } from "@/lib/shipments";
 import CountUp from "./CountUp";
+import { Icon } from "./Icon";
 import { useNavigate } from "./Shell";
 
 // Lighter, brighter versions of the CATS colours; chart only, table tags keep CATS.
-const COLORS: Record<Category, string> = {
+export const COLORS: Record<Category, string> = {
   "document-comparison": "#60a5fa",
   "new-si": "#c084fc",
   invoice: "#fbbf24",
@@ -56,6 +57,7 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
 
   // The ring draws itself clockwise once the data is there. If the panel is still fading in (arriving from another page) wait for it.
   const hasRows = rows.length > 0;
+  const selectedRow = rows.find((c) => c.key === selected);
   if (hasRows && sweepDelay.current === null) sweepDelay.current = Math.max(0.1, 0.75 - (performance.now() - mountedAt.current) / 1000);
   useEffect(() => {
     if (!hasRows) return;
@@ -76,11 +78,11 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
       <path d={sector(c.a0, c.a1, HOLE, HOLE + BAND)} fill="#000" opacity={0.1} />
       {c.popped && (
         <g className="slice-badge" transform={`translate(${pt((OUT + HOLE) / 2, c.mid)})`}>
-          <rect x={-badgeW(c.label) / 2} y={-22} width={badgeW(c.label)} height={44} rx={10} fill="#0f172a" />
-          <text y={-9} textAnchor="middle" dominantBaseline="central" fill="#cbd5e1" fontSize={10.5} fontWeight={600}>
+          <rect x={-badgeW(c.label) / 2} y={-22} width={badgeW(c.label)} height={44} rx={10} style={{ fill: "var(--solid)" }} />
+          <text y={-9} textAnchor="middle" dominantBaseline="central" style={{ fill: "var(--on-solid-2)" }} fontSize={10.5} fontWeight={600}>
             {c.label}
           </text>
-          <text y={8} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize={16} fontWeight={800}>
+          <text y={8} textAnchor="middle" dominantBaseline="central" style={{ fill: "var(--on-solid)" }} fontSize={16} fontWeight={800}>
             {c.pct >= 1 ? Math.round(c.pct) : "<1"}%
           </text>
         </g>
@@ -91,6 +93,17 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
   return (
     <section className="panel fade-up" style={{ "--d": "0.5s" } as React.CSSProperties}>
       <h3 className="card-title">Emails by Category</h3>
+      {/* the slices open their emails on a second click; nothing else on the chart says so */}
+      <p className="chart-hint" aria-live="polite">
+        {selectedRow ? (
+          <>
+            Click <b>{selectedRow.label}</b> again to view its emails
+            <Icon d="chevR" size={14} sw={2.4} />
+          </>
+        ) : (
+          "Click a slice to highlight it, then click it again to view those emails"
+        )}
+      </p>
       <div className="chart-body">
         <ul className="legend">
           {loading &&
@@ -134,7 +147,7 @@ export default function CategoryChart({ shipments, loading = false }: { shipment
               </defs>
             )}
             {/* the grey track is the loading placeholder, and stays behind the ring while it draws in */}
-            {(!hasRows || intro) && <circle className={loading ? "breathe" : undefined} cx={MID} cy={MID} r={(OUT + HOLE) / 2} fill="none" stroke="#e5e5e5" strokeWidth={OUT - HOLE} />}
+            {(!hasRows || intro) && <circle className={loading ? "breathe" : undefined} cx={MID} cy={MID} r={(OUT + HOLE) / 2} fill="none" style={{ stroke: "var(--edge)" }} strokeWidth={OUT - HOLE} />}
             <g mask={intro && hasRows ? "url(#donut-reveal)" : undefined}>
               {rows.filter((c) => !c.popped).map(segment)}
               {rows.filter((c) => c.popped).map(segment)}

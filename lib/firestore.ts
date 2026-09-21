@@ -1,5 +1,6 @@
 // Server-only: Firestore REST access with a Google OAuth2 refresh token (same model as the n8n credential).
 // Never import this from a client component.
+import type { AuditEvent } from "./audit";
 import { FIELDS, FIRESTORE_KEYS, mismatches, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
@@ -200,20 +201,64 @@ export function toShipment(doc: Doc): Shipment {
 
 // ---- Public API -------------------------------------------------------------
 
-export async function listEmails(): Promise<Shipment[]> {
+async function listEmailDocs(): Promise<Doc[]> {
   // ponytail: single page; add a nextPageToken loop past 300 emails.
   const data = (await fsGet("emails?pageSize=300")) as { documents?: { fields?: Record<string, FsValue> }[] };
-  return (data.documents ?? []).map((d) => toShipment(decodeMap(d.fields ?? {})));
+  return (data.documents ?? []).map((d) => decodeMap(d.fields ?? {}));
 }
 
-export async function getEmail(id: string): Promise<Shipment | null> {
-  try {
-    const d = (await fsGet(`emails/${encodeURIComponent(id)}`)) as { fields?: Record<string, FsValue> };
-    return toShipment(decodeMap(d.fields ?? {}));
-  } catch (e) {
-    if ((e as { status?: number }).status === 404) return null;
-    throw e;
+export async function listEmails(): Promise<Shipment[]> {
+  return (await listEmailDocs()).map(toShipment);
+}
+
+// The two audit logs, read-only and newest first:
+//  "system": what the n8n workflow recorded on each email (classified / auto-compared), taken from the email documents;
+//  "user":   every moderator action, which saveModeratorAction writes to `emails/{id}/activity`.
+export async function listAuditLog(source: "user" | "system"): Promise<AuditEvent[]> {
+  const emails = await listEmailDocs();
+  const events: AuditEvent[] = [];
+
+  if (source === "system") {
+    for (const e of emails) {
+      const emailId = str(e.email_id);
+      const base = { emailId, subject: str(e.subject), actor: "n8n Workflow", bot: true, outcome: "", changes: [] };
+      if (e.classified_at) events.push({ ...base, id: `${emailId}:classified`, at: str(e.classified_at), kind: "classified", detail: str(e.classification) });
+      const cmp = e.comparison as Doc | undefined;
+      if (cmp?.performed_at) events.push({ ...base, id: `${emailId}:compared`, at: str(cmp.performed_at), kind: "compared", detail: str(cmp.status) });
+    }
+    return events.sort((a, b) => b.at.localeCompare(a.at));
   }
+
+  const [names, rows] = await Promise.all([
+    fsGet("moderators?pageSize=100").then((d: { documents?: { name: string; fields?: Record<string, FsValue> }[] }) =>
+      Object.fromEntries((d.documents ?? []).map((m) => [m.name.split("/").pop()!, str(decodeMap(m.fields ?? {}).display_name)]))),
+    // ponytail: one page of 500 activity docs, no server-side order (a collection-group order needs an index); sorted below.
+    fs(":runQuery", { method: "POST", body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "activity", allDescendants: true }], limit: 500 } }) }) as Promise<{ document?: { name: string; fields?: Record<string, FsValue> } }[]>,
+  ]);
+  const subject = new Map(emails.map((e) => [str(e.email_id), str(e.subject)]));
+  const label = Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], f.label]));
+  for (const r of rows) {
+    if (!r.document) continue;
+    const [, rawId, docId] = r.document.name.match(/\/emails\/([^/]+)\/activity\/([^/]+)$/) ?? [];
+    if (!rawId) continue;
+    const emailId = decodeURIComponent(rawId);
+    const a = decodeMap(r.document.fields ?? {});
+    const moderator = str(a.moderator_id);
+    const review = a.action === "review_saved";
+    events.push({
+      id: `${emailId}:${docId}`,
+      at: str(a.occurred_at),
+      kind: review ? "review_saved" : "marked_read",
+      actor: names[moderator] || moderator || "Unknown",
+      bot: false,
+      emailId,
+      subject: subject.get(emailId) ?? "",
+      detail: str(a.edited_side).toUpperCase(),
+      outcome: review ? ((a.after as Doc | undefined)?.status === "cleared" ? "cleared" : "flagged") : "",
+      changes: Object.entries((a.changes as Record<string, Doc> | undefined) ?? {}).map(([k, c]) => ({ field: label[k] ?? k, before: str(c.before), after: str(c.after) })),
+    });
+  }
+  return events.sort((a, b) => b.at.localeCompare(a.at));
 }
 
 // Preset demo identity: everyone using this app acts as DanielHo.

@@ -4,15 +4,20 @@ import { useRef } from "react";
 import { countByCountry } from "@/lib/ports";
 import { topN } from "@/lib/top";
 import { useShipments } from "@/lib/useShipments";
-import CategoryChart from "./CategoryChart";
+import { CATS, type Category } from "@/lib/shipments";
+import CategoryChart, { COLORS } from "./CategoryChart";
 import CountUp from "./CountUp";
 import GeoHeat from "./GeoHeat";
+import { Icon } from "./Icon";
+import Profile from "./Profile";
 import TopBars from "./TopBars";
 import { NavLink } from "./Shell";
 
 // Map colour ramps, light -> dark. Constants, so the maps aren't redrawn on every render.
 const OUTBOUND = ["#fde2e6", "#fb7185", "#be123c"];
 const INBOUND = ["#dbeafe", "#60a5fa", "#1d4ed8"];
+const OUTBOUND_DARK = ["#a23a58", "#f0587a", "#ffb3c1"];
+const INBOUND_DARK = ["#1f6a9b", "#38bdf8", "#bae6fd"];
 
 // "64 shipments · 5 countries", plus a note if some ports couldn't be tied to a country
 const mapNote = (m: { rows: unknown[]; placed: number; unplaced: number }) =>
@@ -28,6 +33,18 @@ export default function Dashboard() {
   const cmp = shipments.filter((s) => s.category === "document-comparison");
   const validated = cmp.filter((s) => s.status === "clean").length;
   const needsReview = cmp.filter((s) => s.status === "discrepancy").length;
+  const read = shipments.filter((s) => s.isRead).length;
+  const unread = shipments.length - read;
+  // read / total per category, biggest first, for the "Read by category" rows
+  const byCat = (Object.keys(CATS) as Category[])
+    .map((key) => {
+      const list = shipments.filter((s) => s.category === key);
+      return { key, total: list.length, read: list.filter((s) => s.isRead).length };
+    })
+    .filter((c) => c.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const ratio = shipments.length ? read / shipments.length : 0;
+  const percent = read > 0 && ratio < 0.01 ? "<1" : Math.round(ratio * 100); // never shows 0% while some emails are read
 
   // Shipper / consignee / notify party come from the shipping instruction (what the customer asked for), falling back to the draft BL.
   const docs = shipments.flatMap((s) => s.referenceFields ?? s.extractedFields ?? []);
@@ -43,53 +60,93 @@ export default function Dashboard() {
       <header className="page-head fade-up">
         <div>
           <h1>Dashboard Overview</h1>
-          <p>Ocean document intake, automated cross-verification, and discrepancy desk.</p>
+          <p>Email intake, automated SI and BL cross-verification, and discrepancy review.</p>
         </div>
+        <Profile />
       </header>
 
       <div className="cards">
-        <NavLink href="/emails?view=document-comparison" className="card fade-up" style={{ "--d": "0.12s" } as React.CSSProperties}>
+        <div className="card static wide fade-up" style={{ "--d": "0.12s" } as React.CSSProperties}>
           <div>
             <div className="card-top">
-              <span className="card-title">Comparison Requests</span>
+              <span className="card-title">Email Read Status</span>
+              <span className="muted">{loading ? <span className="skel skel-inline" /> : `${percent}% read`}</span>
             </div>
-            <div className="big">{loading ? <span className="skel skel-num" /> : <CountUp value={cmp.length} delay={wait(0.3)} />}</div>
+            <div className="stats">
+              <div>
+                <div className="big" style={unread > 0 ? { color: "var(--blue)" } : undefined}>
+                  {loading ? <span className="skel skel-num" /> : <CountUp value={unread} delay={wait(0.3)} />}
+                </div>
+                <span className="stat-label">Unread</span>
+              </div>
+              <div>
+                <div className="big">{loading ? <span className="skel skel-num" /> : <CountUp value={read} delay={wait(0.42)} />}</div>
+                <span className="stat-label">Read</span>
+              </div>
+            </div>
+            {loading ? (
+              <span className="skel progress-skel" />
+            ) : (
+              <div className="progress" role="progressbar" aria-label="Emails read" aria-valuemin={0} aria-valuemax={shipments.length} aria-valuenow={read}>
+                <span style={{ width: `${ratio * 100}%` }} />
+              </div>
+            )}
+            <div className="card-foot">
+              <span>{loading ? "Counting emails…" : `${read} of ${shipments.length} emails read`}</span>
+              <b style={unread > 0 ? { color: "var(--blue)" } : undefined}>{loading ? "" : `${unread} unread`}</b>
+            </div>
           </div>
-          <div className="card-foot">
-            <span>High-volume intake stream</span>
+          <div className="cat-block">
+            <span className="stat-label">Read by category</span>
+            <ul className="cat-read">
+              {loading
+                ? [0, 1, 2, 3].map((i) => (
+                    <li key={i} aria-hidden="true">
+                      <span className="skel" style={{ width: "100%" }} />
+                    </li>
+                  ))
+                : byCat.map((c) => (
+                    <li key={c.key} title={`${CATS[c.key].label}: ${c.read} of ${c.total} read`}>
+                      <span className="legend-dot" style={{ background: COLORS[c.key] }} />
+                      <span className="cr-name trunc">{CATS[c.key].label}</span>
+                      <span className="cr-bar">
+                        <span style={{ width: `${(c.read / c.total) * 100}%`, background: COLORS[c.key] }} />
+                      </span>
+                      <b>
+                        {c.read}/{c.total}
+                      </b>
+                    </li>
+                  ))}
+            </ul>
           </div>
-        </NavLink>
+        </div>
 
-        <NavLink href="/emails?view=validated" className="card fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
-          <div>
+        <div className="card static fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
+          <NavLink href="/emails?view=document-comparison" className="card-link" title="View all comparison requests">
             <div className="card-top">
-              <span className="card-title">Validated</span>
+              <span className="card-title">Total Comparison Requests</span>
+              <span className="hint">
+                View all
+                <Icon d="chevR" size={14} sw={2.4} />
+              </span>
             </div>
-            <div className="big" style={validated > 0 ? { color: "#059669" } : undefined}>
-              {loading ? <span className="skel skel-num" /> : <CountUp value={validated} delay={wait(0.42)} />}
-            </div>
+            <div className="big">{loading ? <span className="skel skel-num" /> : <CountUp value={cmp.length} delay={wait(0.42)} />}</div>
+          </NavLink>
+          <div className="pills">
+            <NavLink href="/emails?view=validated" className="pill green" title="View cleared emails">
+              <Icon d="check" size={20} sw={2} />
+              <span>Emails Cleared</span>
+              <b>{loading ? <span className="skel skel-inline" /> : <CountUp value={validated} delay={wait(0.54)} />}</b>
+              <Icon d="chevR" size={18} sw={2.4} />
+            </NavLink>
+            <NavLink href="/emails?view=needs-review" className="pill red" title="View emails pending validation">
+              <Icon d="alert" size={20} sw={2} />
+              <span>Pending Validation</span>
+              <b>{loading ? <span className="skel skel-inline" /> : <CountUp value={needsReview} delay={wait(0.54)} />}</b>
+              <Icon d="chevR" size={18} sw={2.4} />
+            </NavLink>
           </div>
-          <div className="card-foot">
-            <span>Auto-cleared manifest checks</span>
-          </div>
-        </NavLink>
-
-        <NavLink href="/emails?view=needs-review" className="card fade-up" style={{ "--d": "0.36s" } as React.CSSProperties}>
-          <div>
-            <div className="card-top">
-              <span className="card-title">Needs Review</span>
-            </div>
-            <div className="big" style={needsReview > 0 ? { color: "#e11d48" } : undefined}>
-              {loading ? <span className="skel skel-num" /> : <CountUp value={needsReview} delay={wait(0.54)} />}
-            </div>
-          </div>
-          <div className="card-foot">
-            <span>Flagged for operator review</span>
-            <b style={{ color: "#e11d48" }}>
-              {loading ? <span className="skel skel-inline" /> : <CountUp value={needsReview} delay={wait(0.54)} />} Pending
-            </b>
-          </div>
-        </NavLink>
+        </div>
       </div>
 
       <CategoryChart shipments={shipments} loading={loading} />
@@ -102,8 +159,8 @@ export default function Dashboard() {
       </div>
 
       <div className="bars-grid">
-        <GeoHeat order={0} loading={loading} palette={OUTBOUND} title="Outbound · Port of Loading" note={mapNote(outbound)} rows={outbound.rows} />
-        <GeoHeat order={1} loading={loading} palette={INBOUND} title="Inbound · Port of Discharge" note={mapNote(inbound)} rows={inbound.rows} />
+        <GeoHeat order={0} loading={loading} palette={OUTBOUND} paletteDark={OUTBOUND_DARK} title="Outbound · Port of Loading" note={mapNote(outbound)} rows={outbound.rows} />
+        <GeoHeat order={1} loading={loading} palette={INBOUND} paletteDark={INBOUND_DARK} title="Inbound · Port of Discharge" note={mapNote(inbound)} rows={inbound.rows} />
       </div>
     </div>
   );
