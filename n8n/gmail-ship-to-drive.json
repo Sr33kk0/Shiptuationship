@@ -1,0 +1,596 @@
+{
+  "name": "gmail-ship-to-drive",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Gmail +ship → Drive\nStandalone intake. Existing workflows are not modified.\n\n1. Select the same Gmail OAuth2 credential (syho81336.ho@gmail.com) in all Gmail nodes AND List Labels.\n2. Check the Drive credential in Find Existing File and Upload File.\n3. Run manually once, inspect Drive, then activate. The ship-exported label is created automatically.\n4. Ensure executions do not overlap (concurrency 1 where available; never run manual tests alongside production). Filename checks are not an atomic lock.\n\nReads existing +ship mail, including read messages. Preserves all MIME attachments, including inline images. JSON is uploaded LAST. Failures stay unlabelled and retry next poll. See gmail-ship-to-drive.md.",
+        "height": 460,
+        "width": 620
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -550
+      ],
+      "id": "setup",
+      "name": "Setup"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "every-minute",
+      "name": "Every Minute"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        180
+      ],
+      "id": "manual-test",
+      "name": "Manual Test"
+    },
+    {
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/labels",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "list-labels",
+      "name": "List Labels"
+    },
+    {
+      "parameters": {
+        "jsCode": "const label = ($json.labels ?? []).find(label => label.name === 'ship-exported');\nreturn [{ json: { label_id: label?.id ?? '' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "resolve-label",
+      "name": "Resolve Label"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition",
+              "leftValue": "={{ Boolean($json.label_id) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "label-exists",
+      "name": "Label Exists"
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "operation": "create",
+        "name": "ship-exported",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        180
+      ],
+      "id": "create-label",
+      "name": "Create Label"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 20,
+        "simple": true,
+        "filters": {
+          "q": "deliveredto:syho81336.ho+ship@gmail.com -label:ship-exported",
+          "readStatus": "both",
+          "includeSpamTrash": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "find-ship-emails",
+      "name": "Find Ship Emails"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "one-email-at-a-time",
+      "name": "One Email At A Time"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true,
+          "dataPropertyAttachmentsPrefixName": "attachment_"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1540,
+        120
+      ],
+      "id": "get-full-email",
+      "name": "Get Full Email"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst mail = item.json;\nif (typeof mail.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(mail.id)) throw new Error('Missing or invalid Gmail message ID.');\nconst emailId = 'gmail_' + mail.id;\nconst address = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(address).join(', ') : value?.text ?? '';\n// Gmail's MIME parser supplies text even for HTML-only messages.\nif (typeof mail.text !== 'string' && mail.html) throw new Error('HTML email has no parsed text; inspect the Gmail Get output.');\nconst attachments = Object.entries(item.binary ?? {}).map(([key, binary], index) => {\n  const original = (binary.fileName || 'attachment_' + (index + 1)).replace(/[\\\\/\\u0000-\\u001f\\u007f]/g, '_');\n  return { key, binary, filename: emailId + '_' + String(index + 1).padStart(3, '0') + '_' + original };\n});\nconst record = {\n  email_id: emailId,\n  from: address(mail.from),\n  to: address(mail.to),\n  subject: mail.subject ?? '',\n  body: mail.text ?? '',\n  received_at: mail.date ?? '',\n  attachments: attachments.map(a => a.filename),\n};\nconst output = attachments.map(a => ({\n  json: { filename: a.filename, folder_id: '168hy9WprM5UTlvk1lTDyM-CiH5ARFaIQ', gmail_id: mail.id, start_file_batch: true },\n  binary: { data: { ...a.binary, fileName: a.filename } },\n  pairedItem: { item: 0 },\n}));\n// The manifest is last: batch size 1 publishes it only after every attachment succeeds.\nconst filename = emailId + '.json';\noutput.push({\n  json: { filename, folder_id: '1kpP-sxN7aFtzwhpT6Nyk8jUPLuO0HTV6', gmail_id: mail.id, start_file_batch: true },\n  binary: { data: await this.helpers.prepareBinaryData(Buffer.from(JSON.stringify(record, null, 2), 'utf8'), filename, 'application/json') },\n  pairedItem: { item: 0 },\n});\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        120
+      ],
+      "id": "prepare-files",
+      "name": "Prepare Files"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "reset": "={{ $json.start_file_batch === true }}"
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1980,
+        120
+      ],
+      "id": "one-file-at-a-time",
+      "name": "One File At A Time"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "timeout": 30000
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"'\" + $json.folder_id + \"' in parents and trashed = false and name = '\" + $json.filename.replace(/[\\\\']/g, char => String.fromCharCode(92) + char) + \"'\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType)"
+            },
+            {
+              "name": "pageSize",
+              "value": "2"
+            },
+            {
+              "name": "supportsAllDrives",
+              "value": "true"
+            },
+            {
+              "name": "includeItemsFromAllDrives",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        260
+      ],
+      "id": "find-existing-file",
+      "name": "Find Existing File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VFfHFsygZMDaN9Iv",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const files = $json.files;\nif (!Array.isArray(files)) throw new Error('Drive search returned no files array.');\nif (files.length > 1) throw new Error('Duplicate filename in Drive; resolve before retrying.');\nconst source = $('One File At A Time').item;\nif (files[0] && (files[0].name !== source.json.filename || files[0].mimeType === 'application/vnd.google-apps.folder')) throw new Error('Unexpected Drive file match.');\nreturn [{ json: { ...source.json, start_file_batch: false, exists: files.length === 1 }, binary: source.binary, pairedItem: { item: 0 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        260
+      ],
+      "id": "check-existing-file",
+      "name": "Check Existing File"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "condition",
+              "leftValue": "={{ $json.exists }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        260
+      ],
+      "id": "file-exists",
+      "name": "File Exists"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.folder_id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2860,
+        420
+      ],
+      "id": "upload-file",
+      "name": "Upload File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VFfHFsygZMDaN9Iv",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Strip the reset flag before returning to the inner loop.\nreturn [{ json: { complete: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        260
+      ],
+      "id": "file-complete",
+      "name": "File Complete"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "addLabels",
+        "messageId": "={{ $('One Email At A Time').item.json.id }}",
+        "labelIds": "={{ [ $('Resolve Label').first().json.label_id || $('Create Label').first().json.id ] }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2200,
+        -100
+      ],
+      "id": "mark-exported",
+      "name": "Mark Exported",
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Every Minute": {
+      "main": [
+        [
+          {
+            "node": "List Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test": {
+      "main": [
+        [
+          {
+            "node": "List Labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Labels": {
+      "main": [
+        [
+          {
+            "node": "Resolve Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Label": {
+      "main": [
+        [
+          {
+            "node": "Label Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label Exists": {
+      "main": [
+        [
+          {
+            "node": "Find Ship Emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Label": {
+      "main": [
+        [
+          {
+            "node": "Find Ship Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Ship Emails": {
+      "main": [
+        [
+          {
+            "node": "One Email At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One Email At A Time": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Full Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Full Email": {
+      "main": [
+        [
+          {
+            "node": "Prepare Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Files": {
+      "main": [
+        [
+          {
+            "node": "One File At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One File At A Time": {
+      "main": [
+        [
+          {
+            "node": "Mark Exported",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Find Existing File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Existing File": {
+      "main": [
+        [
+          {
+            "node": "Check Existing File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing File": {
+      "main": [
+        [
+          {
+            "node": "File Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Exists": {
+      "main": [
+        [
+          {
+            "node": "File Complete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upload File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload File": {
+      "main": [
+        [
+          {
+            "node": "File Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Complete": {
+      "main": [
+        [
+          {
+            "node": "One File At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Exported": {
+      "main": [
+        [
+          {
+            "node": "One Email At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kuala_Lumpur"
+  },
+  "tags": []
+}

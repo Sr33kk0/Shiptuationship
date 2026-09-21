@@ -683,7 +683,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const attachment = $('Loop Attachments').item.json;\n  const message = String($json.error?.message ?? $json.error ?? $json.message ?? 'Attachment processing failed').slice(0, 2000);\n  return { json: { email_id: attachment.email_id, firestore_document: { fields: {\n    status: { stringValue: 'needs_review' },\n    human_review_required: { booleanValue: true },\n    human_review_reasons: { arrayValue: { values: [\n      ...($('Prepare Email Log').item.json.firestore_document.fields.human_review_reasons.arrayValue.values ?? []),\n      { stringValue: 'Attachment ' + attachment.filename + ' could not be processed: ' + message },\n    ] } },\n    last_ingestion_error: { mapValue: { fields: {\n      filename: { stringValue: attachment.filename },\n      message: { stringValue: message },\n      occurred_at: { timestampValue: new Date().toISOString() },\n    } } },\n  } } } };"
+        "jsCode": "const attachment = $('Loop Attachments').item.json;\n  const last = $input.last().json;\n  const message = String(last.error?.message ?? last.error ?? last.message ?? 'Attachment processing failed').slice(0, 2000);\n  return { json: { email_id: attachment.email_id, firestore_document: { fields: {\n    status: { stringValue: 'needs_review' },\n    human_review_required: { booleanValue: true },\n    human_review_reasons: { arrayValue: { values: [\n      ...($('Prepare Email Log').item.json.firestore_document.fields.human_review_reasons.arrayValue.values ?? []),\n      { stringValue: 'Attachment ' + attachment.filename + ' could not be processed: ' + message },\n    ] } },\n    last_ingestion_error: { mapValue: { fields: {\n      filename: { stringValue: attachment.filename },\n      message: { stringValue: message },\n      occurred_at: { timestampValue: new Date().toISOString() },\n    } } },\n  } } } };"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -914,6 +914,105 @@
       ],
       "id": "6efc3e23-d95a-48c0-b5fb-e49eeed56fe6",
       "name": "Start"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "searchMethod": "query",
+        "queryString": "={{ \"name = '\" + $('Loop Attachments').item.json.filename.replace(/[\\\\']/g, char => String.fromCharCode(92) + char) + \"' and trashed = false\" }}",
+        "limit": 2,
+        "filter": {
+          "folderId": {
+            "__rl": true,
+            "value": "168hy9WprM5UTlvk1lTDyM-CiH5ARFaIQ",
+            "mode": "list",
+            "cachedResultName": "attachments",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/168hy9WprM5UTlvk1lTDyM-CiH5ARFaIQ"
+          },
+          "whatToSearch": "files"
+        },
+        "options": {
+          "fields": [
+            "id",
+            "name",
+            "mimeType"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -2768,
+        1408
+      ],
+      "id": "38717de0-49c1-4813-ad8a-ff2340a6111d",
+      "name": "Find Attachment (Retry)",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "VFfHFsygZMDaN9Iv",
+          "name": "Google Drive account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same checks as Validate Attachment Match, one Retry Loop pass after Wait 30 Seconds.\nconst matches = $input.all().filter(item => item.json.id);\n  const { attempt, max_attempts } = $('Retry Loop').item.json;\n  if (matches.length !== 1) throw new Error(matches.length ? 'Attachment filename is ambiguous in the Drive folder.' : 'Attachment not found in the Drive folder (retry ' + attempt + ' of ' + max_attempts + ').');\n  const attachment = $('Loop Attachments').itemMatching(0).json;\n  const file = matches[0].json;\n  if (file.name !== attachment.filename) throw new Error('Drive returned a different attachment filename.');\n  return [{ json: { email_id: attachment.email_id, filename: file.name, source_file_id: file.id }, pairedItem: { item: 0 } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2528,
+        1408
+      ],
+      "id": "f0407e48-3137-4165-8813-0bde3083edad",
+      "name": "Validate Attachment Match (Retry)",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node: Run Once for All Items, after Validate Attachment Match (error output).\n// Only a missing file is retried; any other validation error is rethrown straight to Prepare Attachment Error.\nconst message = String($json.error?.message ?? $json.error ?? $json.message ?? '');\nif (!message.includes('not found')) throw new Error(message || 'Attachment processing failed');\n// ponytail: 6 x 30 s = 3 min grace for the upstream Drive upload. Change MAX_ATTEMPTS and Wait 30 Seconds together.\nconst MAX_ATTEMPTS = 6;\nreturn Array.from({ length: MAX_ATTEMPTS }, (_, i) => ({\n  json: { attempt: i + 1, max_attempts: MAX_ATTEMPTS, start_retry_batch: true },\n  pairedItem: { item: 0 },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3488,
+        1408
+      ],
+      "id": "5d73313b-e974-434f-a34e-14a720f93883",
+      "name": "Build Retry Attempts",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": "={{ $json.start_retry_batch === true }}"
+        }
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -3248,
+        1408
+      ],
+      "id": "51966fbb-f26c-46d6-b91f-5d001a1c1d1f",
+      "name": "Retry Loop",
+      "notes": "One pass per attempt item. Loop output = try again after a wait; done output = attempts exhausted, log error."
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -3008,
+        1408
+      ],
+      "id": "540ab628-fb3a-473c-a25e-a391712c8669",
+      "name": "Wait 30 Seconds",
+      "webhookId": "b6a8da84-07a0-4d36-9e84-65b06bb10957"
     }
   ],
   "connections": {
@@ -1318,7 +1417,7 @@
         ],
         [
           {
-            "node": "Prepare Attachment Error",
+            "node": "Build Retry Attempts",
             "type": "main",
             "index": 0
           }
@@ -1509,6 +1608,89 @@
         [
           {
             "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Attachment (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Validate Attachment Match (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Attachment Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Attachment Match (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Retry Attempts": {
+      "main": [
+        [
+          {
+            "node": "Retry Loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Attachment Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Loop": {
+      "main": [
+        [
+          {
+            "node": "Prepare Attachment Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Find Attachment (Retry)",
             "type": "main",
             "index": 0
           }
