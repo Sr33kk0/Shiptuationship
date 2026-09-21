@@ -37,7 +37,7 @@ Shiptuationship reads every incoming email, works out what it is, compares the S
 9. [Future roadmap](#9-future-roadmap)
 10. [Setup instructions](#10-setup-instructions)
 11. [Project structure and scripts](#11-project-structure-and-scripts)
-12. [Team and contributions](#12-team-and-contributions)
+12. [Team/contributors](#12-team-and-contributions)
 
 ---
 
@@ -653,7 +653,7 @@ Shiptuationship
 
 ---
 
-## 12. Team and contributions
+## 12. Team/Contributors
 
 [@Sr33kk0](https://github.com/Sr33kk0) 
 
@@ -663,7 +663,7 @@ Shiptuationship
 
 [@jaydenkok929](https://github.com/jaydenkok929)
 
-[@bryanlue721]
+[@bryanlue721](https://github.com/bryanlue721)
 
 ---
 
