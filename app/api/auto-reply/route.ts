@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   if (JSON.stringify(payload).length > 100_000) return bad("Email data is too large", 413);
 
   const webhook = process.env.N8N_AUTO_REPLY_WEBHOOK_URL;
-  if (!webhook) return bad("Auto reply is not configured. Set N8N_AUTO_REPLY_WEBHOOK_URL.", 503);
+  if (!webhook) return bad("AI Reply is not configured. Set N8N_AUTO_REPLY_WEBHOOK_URL.", 503);
 
   try {
     const response = await fetch(webhook, {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     if (!result || typeof result.body !== "string" || !result.body.trim()) throw new Error("n8n returned an empty reply");
     return Response.json({ body: result.body.trim() });
   } catch (error) {
-    console.error("Auto reply webhook failed", error);
+    console.error("AI Reply webhook failed", error);
     return bad("Could not generate a reply. Check the n8n workflow and try again.", 502);
   }
 }

@@ -477,7 +477,7 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .nav-email:not(:disabled):hover { transform: scale(1.08); }
 .nav-email:disabled { opacity: 0.4; cursor: default; }
 
-/* auto-reply section, below the email */
+/* AI Reply section, below the email */
 .reply-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; }
 .reply { margin-top: 16px; background: var(--surface); border: 1px solid var(--edge); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; animation: fade-in 0.2s ease-out; }
 .plain-card .reply { margin-top: 0; }
@@ -486,11 +486,11 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .cog { display: flex; animation: spin 1.6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .cog { animation: none; } }
-.reply-field { display: flex; flex-direction: column; gap: 6px; }
-.reply-top { display: flex; align-items: center; justify-content: space-between; }
-.reply-top label { font-size: 12px; line-height: 16px; font-weight: 700; color: var(--ink-2); }
-.reply-field input, .reply-field textarea { width: 100%; background: var(--surface); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 12px; color: var(--ink-2); font: inherit; font-size: 14px; line-height: 20px; }
-.reply-field textarea { resize: vertical; }
+.reply-field { position: relative; }
+.reply-field textarea { display: block; width: 100%; background: var(--surface); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 56px 12px 12px; color: var(--ink-2); font: inherit; font-size: 14px; line-height: 20px; resize: vertical; }
+.reply-copy { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: var(--surface-2); border: 1px solid var(--edge); border-radius: 6px; color: var(--ink-2); }
+.reply-copy:hover { background: var(--surface); border-color: var(--ink-2); }
+@media (pointer: coarse) { .reply-copy { width: 44px; height: 44px; } .reply-field textarea { padding-right: 64px; } }
 
 .email { flex: 1; padding: 32px; overflow-y: auto; max-width: 768px; margin: 0 auto; width: 100%; }
 .email.plain { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; }

@@ -82,8 +82,8 @@ function Attachments({ names, links, heading }: { names: string[]; links: Record
 
 type Reply = { body: string };
 
-// The auto-reply section that sits below an email: a cogwheel while the reply is being generated, then an editable, copyable body.
-function AutoReply({ reply, generating, onChange, onCopy }: { reply: Reply | null; generating: boolean; onChange: (r: Reply) => void; onCopy: (text: string, what: string) => void }) {
+// The AI Reply section below an email, with an editable reply and an inline copy control.
+function AIReply({ reply, generating, onChange, onCopy }: { reply: Reply | null; generating: boolean; onChange: (r: Reply) => void; onCopy: (text: string, what: string) => void }) {
   const ref = useRef<HTMLElement>(null);
   const show = generating || !!reply;
   useEffect(() => {
@@ -91,8 +91,8 @@ function AutoReply({ reply, generating, onChange, onCopy }: { reply: Reply | nul
   }, [show]);
   if (!show) return null;
   return (
-    <section className="reply" ref={ref} aria-label="Auto reply" aria-busy={generating}>
-      <h4>Auto Reply</h4>
+    <section className="reply" ref={ref} aria-label="AI Reply" aria-busy={generating}>
+      <h4>AI Reply</h4>
       {generating || !reply ? (
         <div className="reply-wait" role="status">
           <span className="cog">
@@ -101,15 +101,12 @@ function AutoReply({ reply, generating, onChange, onCopy }: { reply: Reply | nul
           Generating reply…
         </div>
       ) : (
-        <>
-          <div className="reply-field">
-            <div className="reply-top">
-              <label htmlFor="reply-body">Body</label>
-              <button className="btn ghost" onClick={() => onCopy(reply.body, "body")}>Copy</button>
-            </div>
-            <textarea id="reply-body" rows={14} value={reply.body} onChange={(e) => onChange({ ...reply, body: e.target.value })} />
-          </div>
-        </>
+        <div className="reply-field">
+          <textarea aria-label="AI Reply" rows={14} value={reply.body} onChange={(e) => onChange({ ...reply, body: e.target.value })} />
+          <button type="button" className="reply-copy" aria-label="Copy AI Reply" title="Copy AI Reply" onClick={() => onCopy(reply.body, "AI Reply")}>
+            <Icon d="copy" size={16} />
+          </button>
+        </div>
       )}
     </section>
   );
@@ -402,13 +399,13 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                     </div>
                     <div className="reply-actions">
                       <button className="btn dark" disabled={generating} onClick={generate}>
-                        {reply ? "Regenerate auto reply" : "Generate auto reply"}
+                        {reply ? "Regenerate AI Reply" : "Generate AI Reply"}
                       </button>
                       <button className="btn ghost" onClick={() => setPane("preview")}>
                         Side-by-Side Review
                       </button>
                     </div>
-                    <AutoReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
+                    <AIReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
                   </div>
                 )}
               </div>
@@ -431,14 +428,14 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
               </div>
               <div className="email-body boxed">{s.emailBody}</div>
               <Attachments names={s.attachmentNames} links={s.attachmentLinks} heading="Attached Files" />
-              <AutoReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
+              <AIReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
             </div>
             <div className="plain-foot">
               <button className="btn ghost lg" onClick={close}>
                 Close
               </button>
               <button className="btn dark lg" disabled={generating} onClick={generate}>
-                {reply ? "Regenerate auto reply" : "Generate auto reply"}
+                {reply ? "Regenerate AI Reply" : "Generate AI Reply"}
               </button>
               <button className="btn dark lg" disabled={saving || s.isRead} onClick={onMarkRead}>
                 {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
