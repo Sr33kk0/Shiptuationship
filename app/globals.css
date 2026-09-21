@@ -458,7 +458,7 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .nav-email:disabled { opacity: 0.4; cursor: default; }
 
 /* auto-reply section, below the email */
-.reply-btn { margin-top: 16px; width: fit-content; }
+.reply-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; }
 .reply { margin-top: 16px; background: var(--surface); border: 1px solid var(--edge); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; animation: fade-in 0.2s ease-out; }
 .plain-card .reply { margin-top: 0; }
 .reply h4 { font-weight: 800; font-size: 16px; line-height: 24px; color: var(--ink); letter-spacing: -0.025em; }

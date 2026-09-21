@@ -132,7 +132,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
   const [side, setSide] = useState<Side>("bl"); // which document the form edits
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
-  const [pane, setPane] = useState<Pane>("preview");
+  const [pane, setPane] = useState<Pane>("email");
   const [reply, setReply] = useState<Reply | null>(null);
   const [generating, setGenerating] = useState(false);
   const replyRequest = useRef<AbortController>(null);
@@ -251,7 +251,6 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
             </div>
             <div>
               <div className="modal-line">
-                <h3>{isCmp ? `Manifest Inspection — ${s.id}` : `Email Transmission — ${s.id}`}</h3>
                 <span className="tag" style={{ color: cat.color, background: cat.bg }}>
                   {isCmp ? "SI vs Draft BL" : cat.label}
                 </span>
@@ -274,8 +273,8 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                 value={pane}
                 onChange={setPane}
                 options={[
-                  ["preview", "Side-by-Side Review"],
                   ["email", "Read Email"],
+                  ["preview", "Side-by-Side Review"],
                 ]}
               />
             )}
@@ -401,9 +400,14 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                       <div className="email-body">{s.emailBody}</div>
                       <Attachments names={s.attachmentNames} links={s.attachmentLinks} heading={`Attachments (${s.attachmentNames.length})`} />
                     </div>
-                    <button className="btn dark reply-btn" disabled={generating} onClick={generate}>
-                      {reply ? "Regenerate auto reply" : "Generate auto reply"}
-                    </button>
+                    <div className="reply-actions">
+                      <button className="btn dark" disabled={generating} onClick={generate}>
+                        {reply ? "Regenerate auto reply" : "Generate auto reply"}
+                      </button>
+                      <button className="btn ghost" onClick={() => setPane("preview")}>
+                        Side-by-Side Review
+                      </button>
+                    </div>
                     <AutoReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
                   </div>
                 )}
