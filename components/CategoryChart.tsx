@@ -12,7 +12,7 @@ export const COLORS: Record<Category, string> = {
   "new-si": "#c084fc",
   invoice: "#fbbf24",
   general: "#94a3b8",
-  other: "#fb7185",
+  spam: "#fb7185",
 };
 
 const SIZE = 340; // outer radius is 150; the spare margin is room for a popped-out segment
