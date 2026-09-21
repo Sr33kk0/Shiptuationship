@@ -30,9 +30,8 @@ export default function Dashboard() {
   const mountedAt = useRef(performance.now());
   const wait = (t: number) => Math.max(0, t - (performance.now() - mountedAt.current) / 1000);
 
-  const cmp = shipments.filter((s) => s.category === "document-comparison");
-  const validated = cmp.filter((s) => s.status === "clean").length;
-  const needsReview = cmp.filter((s) => s.status === "discrepancy").length;
+  const needsReview = shipments.filter((s) => s.status === "discrepancy").length;
+  const reviewPending = loadState === "ready" && needsReview > 0;
   const read = shipments.filter((s) => s.isRead).length;
   const unread = shipments.length - read;
   // read / total per category, biggest first, for the "Read by category" rows
@@ -121,31 +120,21 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card static cmp-card fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
-          <NavLink href="/emails?view=document-comparison" className="card-link" title="View all comparison requests">
+        <div className={`card static cmp-card review-card fade-up${reviewPending ? " needs-attention" : ""}`} style={{ "--d": "0.24s" } as React.CSSProperties}>
+          <div>
             <div className="card-top">
-              <span className="card-title">Total Comparison Requests</span>
-              <span className="hint">
-                View all
-                <Icon d="chevR" size={14} sw={2.4} />
-              </span>
+              <span className="card-title">Human Review Needed</span>
+              <Icon d={loadState === "ready" && !needsReview ? "check" : "alert"} size={24} sw={2} />
             </div>
-            <div className="big">{loading ? <span className="skel skel-num" /> : <CountUp value={cmp.length} delay={wait(0.42)} />}</div>
-          </NavLink>
-          <div className="pills">
-            <NavLink href="/emails?view=validated" className="pill green" title="View cleared emails">
-              <Icon d="check" size={20} sw={2} />
-              <span>Emails Cleared</span>
-              <b>{loading ? <span className="skel skel-inline" /> : <CountUp value={validated} delay={wait(0.54)} />}</b>
-              <Icon d="chevR" size={18} sw={2.4} />
-            </NavLink>
-            <NavLink href="/emails?view=needs-review" className="pill red" title="View emails pending validation">
-              <Icon d="alert" size={20} sw={2} />
-              <span>Pending Validation</span>
-              <b>{loading ? <span className="skel skel-inline" /> : <CountUp value={needsReview} delay={wait(0.54)} />}</b>
-              <Icon d="chevR" size={18} sw={2.4} />
-            </NavLink>
+            <div className="big">{loading ? <span className="skel skel-num" /> : loadState === "error" ? "—" : needsReview}</div>
+            <p className="review-summary">
+              {loading ? "Checking for emails that need your attention…" : loadState === "error" ? "Unable to load the review queue. Please refresh to try again." : reviewPending ? `${needsReview === 1 ? "Email requires" : "Emails require"} your attention. Check flagged issues and missing information.` : "You're all caught up. No emails need human review."}
+            </p>
           </div>
+          <NavLink href={loadState === "ready" && !needsReview ? "/emails" : "/emails?status=needs-review"} className="review-action">
+            {reviewPending ? "Review flagged emails" : loadState === "ready" ? "View all emails" : "Open review queue"}
+            <Icon d="chevR" size={18} sw={2.4} />
+          </NavLink>
         </div>
       </div>
 
