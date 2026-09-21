@@ -9,7 +9,6 @@
 **From a noisy shipping inbox to a clear discrepancy report.**
 Shiptuationship reads every incoming email, works out what it is, compares the Shipping Instruction (SI) against the draft Bill of Lading (BL) on seven fields, and hands anything uncertain to a human reviewer, with the evidence attached.
 
-*Built for the **Averis Hackathon 2026**.*
 
 </div>
 
