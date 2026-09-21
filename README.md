@@ -8,7 +8,19 @@
 
 **From a noisy shipping inbox to a clear discrepancy report.**
 Shiptuationship reads every incoming email, works out what it is, compares the Shipping Instruction (SI) against the draft Bill of Lading (BL) on seven fields, and hands anything uncertain to a human reviewer, with the evidence attached.
+
+| | |
+|---|---|
+| **Live app (Vercel)** | https://shiptuationship.vercel.app/ |
+| **Demo video** | https://YOUR-DEMO-VIDEO-LINK |
+| **Test it by email** | [Send a test email](mailto:syho81336.ho+ship@gmail.com?subject=Document%20check%20request) |
+| **Test it by upload** | [Drop a test file into the Drive `/inbox` and `/attachments` folder](https://drive.google.com/drive/folders/1LqdG7w1Sy2AvcCPYbrJbCBRO2JoWrTKK) |
+
 </div>
+
+<p align="center">
+  <img src="public/shiptuationship-email-review.gif" alt="Shiptuationship email inbox showing comparison requests and review statuses" width="100%" />
+</p>
 
 ---
 
@@ -17,12 +29,13 @@ Shiptuationship reads every incoming email, works out what it is, compares the S
 1. [The problem](#1-the-problem)
 2. [Our solution at a glance](#2-our-solution-at-a-glance)
 3. [Technical architecture](#3-technical-architecture)
-4. [Implementation details](#4-implementation-details)
-5. [Challenges faced](#5-challenges-faced)
-6. [Known limitations](#6-known-limitations)
-7. [Future roadmap](#7-future-roadmap)
-8. [Setup instructions](#8-setup-instructions)
-9. [Project structure and scripts](#9-project-structure-and-scripts)
+4. [Something interesting: the dataset's port codes were wrong](#4-something-interesting-the-datasets-port-codes-were-wrong)
+5. [Implementation details](#5-implementation-details)
+6. [Challenges faced](#6-challenges-faced)
+7. [Known limitations](#7-known-limitations)
+8. [Future roadmap](#8-future-roadmap)
+9. [Setup instructions](#9-setup-instructions)
+10. [Project structure and scripts](#10-project-structure-and-scripts)
 
 ---
 
@@ -93,7 +106,7 @@ Success is measured by finding the **right requests** and the **right discrepanc
 | Visible failures and retries | Per-email queue with `queued → processing → done / failed`, `last_error` recorded. A missing attachment auto-retries for 3 minutes inside `ingestion`; a `failed` queue row still needs a manual retry. | n8n `ingestion-drain` |
 | "Which email, mismatch or not, what needs attention" | Dashboard, filterable email table, per-email discrepancy banner, audit logs. | Web app |
 
-> **Scanned or image-only PDFs** get a Google Vision OCR fallback (see [4.3](#43-attachment-handling-and-field-extraction)); a scanned DOCX or a standalone image attachment does not, and still surfaces as an attachment error for a human. See [Known limitations](#6-known-limitations) and the [roadmap](#7-future-roadmap).
+> **Scanned or image-only PDFs** get a Google Vision OCR fallback (see [5.3](#53-attachment-handling-and-field-extraction)); a scanned DOCX or a standalone image attachment does not, and still surfaces as an attachment error for a human. See [Known limitations](#7-known-limitations) and the [roadmap](#8-future-roadmap).
 
 ---
 
@@ -126,7 +139,7 @@ Shiptuationship has **two halves** that share one database:
 
 | Area | What you get |
 |------|--------------|
-| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** signs in as the preset moderator and opens `/dashboard`. Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. A demo sign-in, not real authentication (see [Known limitations](#6-known-limitations)). |
+| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** signs in as the preset moderator and opens `/dashboard`. Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. A demo sign-in, not real authentication (see [Known limitations](#7-known-limitations)). |
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
 | **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box (not yet included in **Print**, see limitations). On phones the *Human review required* reasons fold away behind a chevron. |
@@ -228,13 +241,60 @@ Shiptuationship has **two halves** that share one database:
 | `/api/emails/{id}/read` | `POST` | Mark an email as read (idempotent) |
 | `/api/audit?source=user\|system` | `GET` | User Log (moderator activity) or System Log (n8n activity) |
 
-Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (conflict or precondition failed). Without the demo session cookie (see [4.4](#44-human-in-the-loop-the-web-app)) every `/api/*` route returns `401 {"error":"Log in to continue"}`.
+Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (conflict or precondition failed). Without the demo session cookie (see [5.4](#54-human-in-the-loop-the-web-app)) every `/api/*` route returns `401 {"error":"Log in to continue"}`.
 
 ---
 
-## 4. Implementation details
+## 4. Something interesting: the dataset's port codes were wrong
 
-### 4.1 Ingestion workflows (n8n)
+### 4.1 How we noticed
+
+While checking the first comparison results by hand, we kept seeing port fields that **looked** clean but didn't add up. A Port of Loading would be written as a city name followed by a five-letter code in brackets, in the usual `Name (CCXXX)` shape, and the code was simply **not the code for that port**: it belonged to a different location, sometimes in a different country, or it didn't exist in the UN/LOCODE registry at all.
+
+> **Example from the dataset:** in email_13, the document said `TUTICORIN, INDIA (KEMBA))`, but `KEMBA` is actually the UN/LOCODE for *Mombasa, Kenya*. The name and the code disagreed, and nothing in the document said which one to trust.
+
+That is a nasty class of error. A wrong code is not a formatting quirk that normalisation can smooth over, and it is not a straightforward mismatch either: the SI and the BL often carried the **same** wrong code, so a naive text comparison would have declared the two documents a match and let the error sail through. Both documents agreeing is not the same as both documents being right.
+
+### 4.2 Why the obvious fixes don't work
+
+| Option | Why we rejected it |
+|--------|--------------------|
+| Compare ports as plain text | Two documents with the same wrong code "match". The error is invisible. |
+| Ask the LLM to correct the code | It will happily invent a plausible code. We wanted evidence, not a guess. |
+| Strip the code and compare names only | Throws away the strongest identifier a document has, and `Portland` could be Oregon or Maine. |
+| Hard-code a list of the ports in the sample data | Works for the demo and for nothing else. |
+
+### 4.3 What we did: validate every port against the real UN/LOCODE registry
+
+We added a dedicated **`Check Port Code`** step to the n8n `ingestion` workflow, between extraction and comparison, that treats a port value as a **claim to be verified** rather than a string to be compared:
+
+1. **Embed the registry.** The full UN/LOCODE dataset is embedded straight into the n8n node's code, with a SHA-256 of the dataset recorded on every result. The check runs with no network, filesystem, packages or external database, so it is deterministic and works the same in every environment.
+2. **Read the document's own evidence.** A bracketed code such as `Port Klang (MYPKG)` is taken as explicit. Otherwise a bare trailing code is recognised (while refusing to mistake `CHINA` or a five-letter place name for a code). Country names and common aliases (`USA`, `UAE`, `UK`, `PRC`, `Viet Nam`, ...) are peeled off the end and used to narrow the search, and the registry's subdivision column resolves `Portland OR` vs `Portland ME`.
+3. **Cross-check name against code.** If both are present they must agree. If only a name is present it must resolve to **exactly one** LOCODE. Every port ends up with an explicit status:
+
+   | Status | Meaning | What happens |
+   |--------|---------|--------------|
+   | `valid` | name and code agree | value rewritten to canonical `Name, Country (CODE)` |
+   | `added` | a unique code was resolved from the name alone | same, code filled in |
+   | `mismatch` | the document's code and name disagree | **routed to a human**, with both sides of the conflict spelled out |
+   | `ambiguous` | the name matches several LOCODEs | routed to a human, listing the candidates |
+   | `unknown_code` / `unknown_location` | not in the registry | routed to a human |
+   | `missing` | blank, `N/A`, a country alone | routed to a human |
+
+4. **Refuse to compare unverified ports.** `Compare Fields` requires **both** the SI and the BL side to be `valid` or `added` before a port field can match at all. Anything else fails that field and adds a specific reason to `human_review_reasons`, for example *"BL - Port of Loading: 'X' matches 2 UN/LOCODEs (…). Supply the intended code."* The email lands in **Needs Review** with the reason on screen, and the moderator fixes it in the review form.
+
+### 4.4 What it bought us
+
+- **Agreeing documents can still be flagged.** Two documents carrying the same wrong code are no longer a silent pass; the code is checked against the registry, not against the other document.
+- **Canonical values everywhere.** What is stored in `si` / `bl` is `NAME, COUNTRY (CODE)`, so `Port Klang`, `PORT KLANG (MYPKG)` and `Port Klang, Malaysia` all compare equal, and the dashboard's heat maps can place every port on the map from its code.
+- **Every escalation says why.** The moderator sees *"code and name disagree"* or *"matches 2 UN/LOCODEs"*, not a bare "mismatch", so the fix takes seconds.
+- **No LLM in the loop.** The check is plain code over a versioned dataset. Same input, same answer, and a dataset hash on every result so it can be audited later.
+
+---
+
+## 5. Implementation details
+
+### 5.1 Ingestion workflows (n8n)
 
 Five workflows are exported in [`n8n/`](n8n):
 
@@ -250,7 +310,7 @@ Five workflows are exported in [`n8n/`](n8n):
 
 **Why the queue?** The native Google Drive Trigger has no limit: a 250-file drop would land in a single execution and hold 250 sub-workflow results in one heap. A capped `files.list` plus a Firestore queue means every run is bounded (20 files), retryable and visible.
 
-### 4.2 Classification
+### 5.2 Classification
 
 An LLM (Google Vertex AI, `gemini-3.5-flash-lite`) returns **exactly one** JSON classification. The prompt is hardened for messy real-world inputs:
 
@@ -261,7 +321,7 @@ An LLM (Google Vertex AI, `gemini-3.5-flash-lite`) returns **exactly one** JSON 
 
 A code node then **validates** the answer against the five allowed values. If the model fails or returns something invalid the email is stored as `Other` with `classification_error` and `status: needs_review`, so nothing is lost silently.
 
-### 4.3 Attachment handling and field extraction
+### 5.3 Attachment handling and field extraction
 
 For each attachment of a comparison request:
 
@@ -277,7 +337,7 @@ For each attachment of a comparison request:
 5. **Validate before storing.** A code node checks the LLM's JSON: the document type must be `BL` or `SI`, text fields must be strings or `null`, the container count must be a whole number, the weight a non-negative number. An extraction that contains none of the seven fields is **rejected** rather than allowed to overwrite stored data.
 6. Store the result under `si` / `bl` with the source file recorded (`filename`, `drive_file_id`). This version keeps **one SI and one BL per email**.
 
-### 4.3.1 Comparison (deterministic, no LLM)
+### 5.3.1 Comparison (deterministic, no LLM)
 
 Comparing is deliberately **plain code**, so the same input always gives the same answer. Each of the seven fields is normalised on both sides, then compared:
 
@@ -287,15 +347,15 @@ Comparing is deliberately **plain code**, so the same input always gives the sam
 | Either value missing (one side or both) | **Discrepancy**, severity `major` — two blank fields do **not** count as a match |
 | Container count | Must be **exactly equal** |
 | Gross weight | Equal within an **absolute ~0.001 kg** allowance for floating-point rounding — effectively exact, not a percentage tolerance |
-| Port of Loading / Port of Discharge | Both sides must independently pass **UN/LOCODE validation** (see [4.3.2](#432-port-code-validation-unlocode)) *and* their validated names must match |
+| Port of Loading / Port of Discharge | Both sides must independently pass **UN/LOCODE validation** (see [5.3.2](#532-port-code-validation-unlocode)) *and* their validated names must match |
 | Other text fields (Shipper, Consignee, Notify Party) | Both sides normalised: Unicode-folded, upper-cased, punctuation stripped, legal-entity suffixes unified (`Limited`→`LTD`, `Incorporated`→`INC`, `Corporation`→`CORP`, `Sendirian Berhad`→`SDN BHD`, `Private`/`Proprietary (Limited)`→`PTE`/`PTY`, `Company (Limited)`→`CO`). `Notify Party` values like `SAME AS CONSIGNEE` resolve to the actual consignee before comparing. `TO ORDER (OF)` is stripped from Consignee |
 | After normalising | **Equal → formatting difference:** recorded in `formatting_notes`, **not flagged** (avoids false alarms). **Not equal → real discrepancy, severity always `major`** (there is no "minor" tier) |
 
 Result: `comparison.status` is **`flagged`** if any real discrepancy exists, otherwise **`cleared`**, and `human_review_required` is set to match. If the SI or BL side could not be extracted at all — or a port failed UN/LOCODE validation — the status is **`incomplete`** / **`needs_review`** and the case is routed to a human.
 
-### 4.3.2 Port code validation (UN/LOCODE)
+### 5.3.2 Port code validation (UN/LOCODE)
 
-Port of Loading and Port of Discharge get their own validation step, separate from the rest of the comparison, in a dedicated `Check Port Code` node that embeds a full **UN/LOCODE dataset** (~4.7 MB, generated offline via `n8n/embed-locodes.py`, no network or filesystem access at runtime):
+Port of Loading and Port of Discharge get their own validation step, separate from the rest of the comparison, in a dedicated `Check Port Code` node that embeds a full **UN/LOCODE dataset**
 
 - Reads a bracketed code first (`Port Klang (MYPKG)`), then a bare trailing code, then falls back to matching the location name (with an optional country/subdivision suffix) against the dataset.
 - Recognises country names and common aliases (`USA`, `UAE`, `UK`, `PRC`, ...) to disambiguate a location that matches more than one LOCODE.
@@ -303,11 +363,11 @@ Port of Loading and Port of Discharge get their own validation step, separate fr
 - On `valid`/`added`, the stored `port_of_loading` / `port_of_discharge` value is **rewritten** to a canonical `"Name, Country (CODE)"` form before it's saved — so what ends up in `si`/`bl` isn't always the extractor's raw text.
 - `Compare Fields` requires **both** sides to be `valid` or `added` before a port field can match at all; any other status fails that field and adds a specific reason (e.g. *"BL - Port of Loading: 'X' matches 2 UN/LOCODEs..."*) to `human_review_reasons`.
 
-### 4.4 Human in the loop (the web app)
+### 5.4 Human in the loop (the web app)
 
 The web app is where "ask for help" happens.
 
-- **Where the humans are pulled in:** the pipeline marks cases `flagged` (real discrepancy), `incomplete` (missing SI or BL) or `needs_review` (classification error), each with `human_review_required` where a person must act. `flagged` comparison emails appear in the **Emails** page under **Needs Review** (and on the dashboard's red **Pending Validation** button). Clean ones appear under **Validated**. The other two states are stored in Firestore but shown in the inbox as "Received" for now (see [limitations](#6-known-limitations)).
+- **Where the humans are pulled in:** the pipeline marks cases `flagged` (real discrepancy), `incomplete` (missing SI or BL) or `needs_review` (classification error), each with `human_review_required` where a person must act. `flagged` comparison emails appear in the **Emails** page under **Needs Review** (and on the dashboard's red **Pending Validation** button). Clean ones appear under **Validated**.
 - **Review screen:** the left pane holds the seven editable fields for **one document at a time** (switch *Carrier Draft BL* / *Customer SI*). The right pane shows the **SI and Draft BL as paper documents side by side**. Fields that differ are shown in **red text on the document being edited**, and the *Human review required* section at the top lists the reasons (it can be folded on phones). *Read Email* replaces the comparison with the original email and hides the form.
 - **Save flow (`POST /api/emails/{id}/review`):**
   1. Load the email and refuse if there is no SI/BL pair to compare.
@@ -318,7 +378,7 @@ The web app is where "ask for help" happens.
 - **Read state:** "Mark as read" is stored separately from the comparison status (`read_status`), is idempotent, and drives the Gmail-style bold and dot in the inbox and the dashboard's read/unread progress.
 - **Identity:** the app runs as a **preset moderator (`DanielHo`)**. The front page's **Log in** button is a one-click demo sign-in: it sets a session cookie (`lib/session.ts`) and `proxy.ts` sends logged-out requests for app pages back to `/` and answers `401` on `/api/*`. **Log out** (in the profile menu) clears it. This is not real authentication, and everyone is attributed to that identity. Existing records without attribution stay "unknown" and are never retro-assigned.
 
-### 4.5 Audit logs
+### 5.5 Audit logs
 
 Two separate pages, both read-only and built only from Firestore:
 
@@ -331,7 +391,7 @@ The System Log's actor is stored as "n8n Workflow" in the data and displayed as 
 
 Both have dropdown filters (**Action** and **User**) whose choice lives in the URL (`?action=review_saved&user=Daniel%20Ho`), day dividers (Today / Yesterday / date), and refresh every 30 s.
 
-### 4.6 Front-end engineering
+### 5.6 Front-end engineering
 
 | Topic | What we did |
 |-------|-------------|
@@ -347,7 +407,7 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 | **Accessibility** | Keyboard-operable slices, rows and menus, ARIA roles on the progress bar and radio groups, focus rings, and reduced-motion support |
 | **Branding and sharing** | Custom vector logo (traced from the source PNG), favicon, and Open Graph and Twitter card metadata with a 1200×630 preview image (`public/opengraph.png`) |
 
-### 4.7 Security and safety
+### 5.7 Security and safety
 
 - **Untrusted input:** emails and attachments are treated as data in every prompt, and the classifier and extractor are told never to obey instructions found inside them.
 - **No silent guessing:** every uncertain path (bad classification, missing attachment, unreadable file, incomplete SI/BL) ends in a **visible status** and a human queue, never a fabricated value.
@@ -357,7 +417,7 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 
 ---
 
-## 5. Challenges faced
+## 6. Challenges faced
 
 | Challenge | What happened | How we solved it |
 |-----------|---------------|------------------|
@@ -370,14 +430,11 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 | **Never lose or double-process an email** | Retries, crashes and re-uploads | Create-only enqueue, atomic claims, stale re-queue after 15 min, and file-id (not `email_id`) as the dedupe key |
 | **Human edits vs the automation's data** | A re-ingestion could overwrite a moderator's correction | Human corrections live in a separate `review.*` namespace with a nested field mask, so neither side clobbers the other |
 | **Concurrent moderators** | Two people saving the same email | Firestore `updateTime` preconditions in one atomic commit. A conflict returns `409`, and the UI asks the user to refresh |
-| **Dates were empty** | `received_at` is blank in the sample data, and server vs browser time zones disagreed | Use `classified_at`, carry ISO UTC to the browser and format there, so filters and labels always agree |
 | **Firestore without an SDK** | We wanted one auth model shared with n8n and no service account | A small REST client with an OAuth refresh-token exchange and value encoders and decoders |
-| **Touch scrolling on tablets and phones** | Lists were clipped or unscrollable on some iPads and landscape phones | Fixed flex sizing for card mode, then re-checked scrolling and real touch swipes across a range of phone, tablet and landscape sizes |
-| **Polish across five themes** | Hard-coded colours everywhere | Introduced design tokens, moved every neutral onto variables, added per-scheme blocks and made the maps and the paper documents theme-aware |
 
 ---
 
-## 6. Known limitations
+## 7. Known limitations
 
 Being honest about what this version does **not** do yet:
 
@@ -388,7 +445,7 @@ Being honest about what this version does **not** do yet:
 
 ---
 
-## 7. Future roadmap
+## 8. Future roadmap
 
 ## Phase 1: Near-Term (Accuracy)
  
@@ -411,9 +468,9 @@ Being honest about what this version does **not** do yet:
  
 ---
 
-## 8. Setup instructions
+## 9. Setup instructions
 
-### 8.1 Dependencies
+### 9.1 Dependencies
 
 | Need | Version / note | Needed for |
 |------|----------------|------------|
@@ -434,7 +491,7 @@ Dataset layout in Google Drive:
 └─ /attachments   SI and BL files (.txt .xlsx .pdf .docx)
 ```
 
-### 8.2 Run the web app
+### 9.2 Run the web app
 
 ```bash
 # 1. Install
@@ -443,11 +500,11 @@ npm install
 # 2. Create your local environment file (never committed)
 cp .env.example .env.local        # Windows PowerShell: Copy-Item .env.example .env.local
 
-# 3. Fill in .env.local (see 8.3), then start the dev server
+# 3. Fill in .env.local (see 9.3), then start the dev server
 npm run dev                        # http://localhost:3000
 ```
 
-Open `http://localhost:3000` and click **Log in** to enter the app (the app pages and the API need the demo session, see 4.4).
+Open `http://localhost:3000` and click **Log in** to enter the app (the app pages and the API need the demo session, see 5.4).
 
 Production build:
 
@@ -457,7 +514,7 @@ npm run build && npm run start
 
 Type-check only: `npx tsc --noEmit`
 
-### 8.3 Environment variables (`.env.local`)
+### 9.3 Environment variables (`.env.local`)
 
 | Variable | Required | Description |
 |----------|:--------:|-------------|
@@ -470,7 +527,7 @@ Type-check only: `npx tsc --noEmit`
 
 > **Never commit `.env.local`.** It is already listed in `.gitignore`. Keep secrets out of screenshots, issues and commits.
 
-### 8.4 Getting the Google refresh token (one time)
+### 9.4 Getting the Google refresh token (one time)
 
 1. In the Google Cloud console go to **APIs & Services → Credentials** and use the OAuth client n8n already uses (or create a *Web* client).
 2. Add `https://developers.google.com/oauthplayground` as an **authorised redirect URI** on that client.
@@ -480,7 +537,7 @@ Type-check only: `npx tsc --noEmit`
 
 **Check it works:** click **Log in** on `http://localhost:3000`, then open `http://localhost:3000/api/emails` in the same browser. You should get a JSON array (empty until n8n has ingested something).
 
-### 8.5 Set up the ingestion pipeline (n8n)
+### 9.5 Set up the ingestion pipeline (n8n)
 
 1. **Import** the five files from [`n8n/`](n8n): `gmail-ship-to-drive.json`, `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`, and `auto-reply.json`.
 2. **Create credentials** in n8n:
@@ -509,7 +566,7 @@ NODE_OPTIONS=--max-old-space-size=4096       # bigger heap (give the container a
 
 ---
 
-## 9. Project structure and scripts
+## 10. Project structure and scripts
 
 ```
 Shiptuationship
