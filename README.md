@@ -4,7 +4,7 @@
 
 # Shiptuationship
 
-### SI & BL Verification Desk
+### AI Logistics Assistant
 
 **From a noisy shipping inbox to a clear discrepancy report.**
 Shiptuationship reads every incoming email, works out what it is, compares the Shipping Instruction (SI) against the draft Bill of Lading (BL) on seven fields, and hands anything uncertain to a human reviewer, with the evidence attached.
@@ -105,18 +105,19 @@ Success is measured by finding the **right requests** and the **right discrepanc
 Shiptuationship has **two halves** that share one database:
 
 - **An automated back end (n8n + a local LLM)** that watches a Google Drive inbox, classifies every email, extracts the seven fields from the SI and BL attachments, runs the comparison and writes the result to **Firestore**.
-- **A web app (Next.js)**, the *SI & BL Verification Desk*, where an operator sees everything at a glance, reviews flagged emails side by side, corrects values, marks emails as read, and audits what both the automation and the humans did.
+- **A web app (Next.js)**, the *AI Logistics Assistant*, with a public front page and a logged-in desk where an operator sees everything at a glance, reviews flagged emails side by side, corrects values, marks emails as read, and audits what both the automation and the humans did.
 
 ### Feature tour
 
 | Area | What you get |
 |------|--------------|
+| **Front page and login** | A product-style front page at `/` (always light, sections fade in as you scroll where the browser supports it). **Log in** signs in as the preset moderator and opens `/dashboard`. Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. A demo sign-in, not real authentication (see [Known limitations](#7-known-limitations)). |
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
-| **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison, "Mark as read", and a **Read Email** arrow to flip between the comparison and the original email. |
+| **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel and then an editable, copyable reply box; the text itself is not generated yet (see limitations). On phones the *Human review required* reasons fold away behind a chevron. |
 | **User Log** | A chronological audit feed of every **moderator action** (reviews saved, emails marked read), with before/after field changes you can expand. |
-| **System Log** | The same feed for everything the **n8n automation** did (classified, auto-compared). |
-| **Settings** | Five colour schemes: Light, Dark (true black), Ocean, Forest and Sunset. |
+| **System Log** | The same feed for everything the automation did (classified, auto-compared), shown as **Ship AI** with the Shiptuationship logo as its avatar. |
+| **Settings** | Five colour schemes for the app: Light, Dark (true black), Ocean, Forest and Sunset. The front page ignores them and is always light. |
 | **Everywhere** | Fully responsive (drawer menu on phones, cards instead of tables), animated but respects *reduced motion*, refreshes from Firestore every 30 s. |
 
 ---
@@ -147,7 +148,7 @@ flowchart LR
 
     subgraph WEB["Next.js web app"]
         API["Route handlers<br/>/api/emails · /api/audit"]
-        UI["Dashboard · Emails · Review<br/>User Log · System Log · Settings"]
+        UI["Front page · Dashboard · Emails · Review<br/>User Log · System Log · Settings"]
     end
 
     DRIVE -->|files.list, capped at 20| TRIG
@@ -185,6 +186,7 @@ flowchart LR
 | Styling | Hand-written **CSS** (design tokens and per-theme variables). No CSS framework | Responsive layout, five colour schemes |
 | Charts | Custom **SVG** donut and bars, **Google Charts GeoChart** (loaded from `gstatic`, no API key) | Category chart, top-3 bars, heat maps |
 | Server side of the web app | Next.js **route handlers** (Node runtime) | Talk to Firestore. Credentials never reach the browser |
+| Access gate (demo) | A session cookie plus Next.js **`proxy.ts`** | Keeps logged-out visitors on the front page and off the data API. Not real authentication |
 | Database | **Google Cloud Firestore** via its **REST API** | Single source of truth |
 | Auth to Firestore | **Google OAuth2 refresh token** (same model as the n8n credential) | No service account, no Firebase SDK |
 | Automation | **n8n** (3 exported workflows in [`n8n/`](n8n)) | Ingestion, orchestration, comparison |
@@ -205,7 +207,7 @@ flowchart LR
 | `classified_at` | n8n | When the automation processed it. This is the date shown in the app |
 | `classification_error`, `last_ingestion_error`, `missing_attachments_warning` | n8n | Why something needs human attention |
 | `si`, `bl` | n8n | Extracted fields: `shipper`, `consignee`, `notify_party`, `port_of_loading`, `port_of_discharge`, `container_count`, `gross_weight_kg` |
-| `si_source`, `bl_source` | n8n | The source attachment: `filename` and `drive_file_id` |
+| `si_source`, `bl_source` | n8n | The source attachment: `filename`, `drive_file_id` and `drive_link` (its Google Drive URL, which the web app uses to link that attachment) |
 | `comparison` | n8n | `status`, `performed_at`, `discrepancies[]`, `formatting_notes[]`, and per-field `{ match, bl, si, discrepancy_type, severity, *_normalized }` |
 | `status` | n8n, web app | `pending` / `needs_review` / `incomplete` / `flagged` / `cleared` |
 | `human_review_required` | n8n, web app | `true` when a person must look at it |
@@ -236,7 +238,7 @@ flowchart LR
 | `/api/emails/{id}/read` | `POST` | Mark an email as read (idempotent) |
 | `/api/audit?source=user\|system` | `GET` | User Log (moderator activity) or System Log (n8n activity) |
 
-Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (conflict or precondition failed).
+Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (conflict or precondition failed). Without the demo session cookie (see [5.4](#54-human-in-the-loop-the-web-app)) every `/api/*` route returns `401 {"error":"Log in to continue"}`.
 
 ---
 
@@ -275,6 +277,8 @@ cp .env.example .env.local        # Windows PowerShell: Copy-Item .env.example .
 npm run dev                        # http://localhost:3000
 ```
 
+Open `http://localhost:3000` and click **Log in** to enter the app (the app pages and the API need the demo session, see 5.4).
+
 Production build:
 
 ```bash
@@ -303,7 +307,7 @@ Type-check only: `npx tsc --noEmit`
 4. The Google account you consent with needs the **Cloud Datastore User** IAM role on the Firestore project.
 5. Paste the three values into `.env.local`.
 
-**Check it works:** open `http://localhost:3000/api/emails`. You should get a JSON array (empty until n8n has ingested something).
+**Check it works:** click **Log in** on `http://localhost:3000`, then open `http://localhost:3000/api/emails` in the same browser. You should get a JSON array (empty until n8n has ingested something).
 
 ### 4.5 Set up the ingestion pipeline (n8n)
 
@@ -332,6 +336,7 @@ NODE_OPTIONS=--max-old-space-size=4096       # bigger heap (give the container a
 
 | Symptom | Likely cause and fix |
 |---------|----------------------|
+| `/api/emails` returns `401` *Log in to continue* | You are not logged in. Click **Log in** on the front page first |
 | `/api/emails` returns `502` with *Missing GOOGLE_CLIENT_ID…* | `.env.local` is missing or incomplete. Restart `npm run dev` after editing it |
 | `OAuth token refresh failed` | Wrong client id/secret, or the refresh token was issued for another client |
 | `Firestore 403` | The Google account lacks **Cloud Datastore User** on the project |
@@ -415,14 +420,15 @@ Result: `comparison.status` is **`flagged`** if any real discrepancy exists, oth
 The web app is where "ask for help" happens.
 
 - **Where the humans are pulled in:** the pipeline marks cases `flagged` (real discrepancy), `incomplete` (missing SI or BL) or `needs_review` (classification error), each with `human_review_required` where a person must act. `flagged` comparison emails appear in the **Emails** page under **Needs Review** (and on the dashboard's red **Pending Validation** button). Clean ones appear under **Validated**. The other two states are stored in Firestore but shown in the inbox as "Received" for now (see [limitations](#7-known-limitations)).
-- **Review screen:** the left pane holds the seven editable fields for **one document at a time** (switch *Carrier Draft BL* / *Customer SI*). The right pane shows the **SI and Draft BL as paper documents side by side**. Fields that differ are shown in **red text on the document being edited**, and the banner lists exactly those fields with both values.
+- **Review screen:** the left pane holds the seven editable fields for **one document at a time** (switch *Carrier Draft BL* / *Customer SI*). The right pane shows the **SI and Draft BL as paper documents side by side**. Fields that differ are shown in **red text on the document being edited**, and the *Human review required* section at the top lists the reasons (it can be folded on phones). *Read Email* replaces the comparison with the original email and hides the form.
 - **Save flow (`POST /api/emails/{id}/review`):**
   1. Load the email and refuse if there is no SI/BL pair to compare.
   2. Compare the edited side against the other side with the same seven-field rule. The result sets `status` to `flagged` or `cleared` and `human_review_required` accordingly.
   3. Write **`review.fields`** (BL) or **`review.si_fields`** (SI) with a **nested `updateMask`**, so saving one side keeps the other side's override.
   4. Add an **`activity`** document (who, what, before and after, server timestamp) **in the same atomic commit**, guarded by the document's `updateTime` so concurrent edits are rejected instead of overwritten.
+- **Around the review:** the ‹ › buttons and arrow keys move to the previous or next email in the current list, **Print** builds an A4 print preview of everything known about the email (details, review reasons, the field-by-field comparison, body, attachments, audit trail) in a new tab, and attachments open the `drive_link` that n8n stored (only the SI and BL files have one). Moving to another email discards unsaved edits, with a toast.
 - **Read state:** "Mark as read" is stored separately from the comparison status (`read_status`), is idempotent, and drives the Gmail-style bold and dot in the inbox and the dashboard's read/unread progress.
-- **Identity:** the app runs as a **preset moderator (`DanielHo`)**. The front page's **Log in** button is a one-click demo sign-in (a session cookie, see `lib/session.ts` and `proxy.ts`), not real authentication, and everyone is attributed to that identity. Existing records without attribution stay "unknown" and are never retro-assigned.
+- **Identity:** the app runs as a **preset moderator (`DanielHo`)**. The front page's **Log in** button is a one-click demo sign-in: it sets a session cookie (`lib/session.ts`) and `proxy.ts` sends logged-out requests for app pages back to `/` and answers `401` on `/api/*`. **Log out** (in the profile menu) clears it. This is not real authentication, and everyone is attributed to that identity. Existing records without attribution stay "unknown" and are never retro-assigned.
 
 ### 5.5 Audit logs
 
@@ -432,6 +438,8 @@ Two separate pages, both read-only and built only from Firestore:
 |------|--------|-------|
 | **User Log** (`/audit/user`) | `emails/*/activity` (a collection-group query) plus `moderators` for display names | Reviews saved (with expandable per-field before → after diffs) and marked-read events |
 | **System Log** (`/audit/system`) | `classified_at` and `comparison.performed_at` on each email | What the n8n automation did: classified as *X*, ran the SI/BL comparison with its result |
+
+The System Log's actor is stored as "n8n Workflow" in the data and displayed as **Ship AI** (with the logo as its avatar) by the web app.
 
 Both have dropdown filters (**Action** and **User**) whose choice lives in the URL (`?action=review_saved&user=Daniel%20Ho`), day dividers (Today / Yesterday / date), and refresh every 30 s.
 
@@ -444,16 +452,19 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 | **Server-only secrets** | `lib/firestore.ts` (OAuth and REST) is imported only by route handlers. The browser never sees a credential |
 | **Time handling** | The app stores UTC ISO timestamps and formats them in the viewer's own time zone (`dd/mm/yy` and 24-hour time) |
 | **Responsive design** | ≤ 900 px: drawer menu and top bar. ≤ 1279 px: table becomes cards. Tuned for phones, iPads and landscape, with safe-area insets and `dvh` units |
-| **Theming** | CSS variables per scheme (`data-theme` on `<html>`). The saved choice is applied *before first paint* by a tiny inline script, so there is no flash. Maps redraw with the scheme's colours |
+| **Theming** | CSS variables per scheme (`data-theme` on `<html>`). Inside the app the saved choice is applied *before first paint* by a tiny inline script, so there is no flash. Maps redraw with the scheme's colours. The logged-out front page never loads that script, so it is always light |
+| **Front page** | Server-rendered at `/` for logged-out visitors (`components/Landing.tsx`); the layout only mounts the app shell and its data fetching once the session cookie exists. Sections fade in with **CSS scroll-driven animation** (no script), which is skipped, leaving everything visible, in browsers without support or with reduced motion |
+| **Print** | `lib/printEmail.ts` builds a self-contained, escaped A4 page (`@page` size and margins, page-break rules) and opens it as a Blob in a new tab; nothing is stored or sent |
 | **Performance** | Only the first ~15 table rows animate, the rest render instantly. IntersectionObserver gates heavy animations until visible. Count-up numbers and chart sweeps respect `prefers-reduced-motion` |
 | **Accessibility** | Keyboard-operable slices, rows and menus, ARIA roles on the progress bar and radio groups, focus rings, and reduced-motion support |
-| **Branding and sharing** | Custom vector logo (traced from the source PNG), favicon, and Open Graph and Twitter card metadata with a generated 1200×630 preview image |
+| **Branding and sharing** | Custom vector logo (traced from the source PNG), favicon, and Open Graph and Twitter card metadata with a 1200×630 preview image (`public/opengraph.png`) |
 
 ### 5.7 Security and safety
 
 - **Untrusted input:** emails and attachments are treated as data in every prompt, and the classifier and extractor are told never to obey instructions found inside them.
 - **No silent guessing:** every uncertain path (bad classification, missing attachment, unreadable file, incomplete SI/BL) ends in a **visible status** and a human queue, never a fabricated value.
 - **Secrets:** OAuth credentials live only in `.env.local` (git-ignored) and n8n credentials. Nothing sensitive is in the repository.
+- **Demo access gate:** without the session cookie the app pages redirect to the front page and `/api/*` answers `401`. It is a convenience gate for a demo, not authentication: anyone can set the cookie.
 - **Write safety:** moderator writes use Firestore preconditions and one atomic commit, so concurrent edits fail loudly instead of corrupting data.
 
 ---
@@ -485,7 +496,9 @@ Being honest about what this version does **not** do yet:
 - **No OCR or vision.** Image-only or scanned PDFs are not read. PDF handling is text extraction, so those cases surface as errors or incomplete comparisons for a human.
 - **Two comparison rules.** The pipeline compares **normalised** values (formatting differences are tolerated). The web app's live highlight and re-comparison on save uses **exact** text equality on the seven fields, so it can flag a formatting-only difference that n8n deliberately ignored.
 - **`incomplete` and `needs_review` are not yet surfaced.** They are stored (with `human_review_required`) but the inbox shows them as "Received"; only `flagged` and `cleared` get their own view.
-- **No real login.** The front page's **Log in** and the sidebar's **Log out** only set and clear a demo session cookie. All moderator actions are attributed to one preset identity (`DanielHo`).
+- **No real login.** The front page's **Log in** and the profile menu's **Log out** only set and clear a demo session cookie. All moderator actions are attributed to one preset identity (`DanielHo`).
+- **Attachment links only for the SI and BL files.** n8n stores a `drive_link` only for the two files it extracts from, so other attachments show as plain names.
+- **Auto reply is UI only.** *Generate auto reply* shows the loading state and an empty, editable, copyable box; no LLM is connected, so no text is generated, and the printout does not include a reply.
 - **Polling, not push.** The UI refreshes every 30 s rather than streaming Firestore changes.
 - **Limits of scale.** The email list reads one page (up to 300 documents) and the User Log one page (up to 500 activity records). The Drive trigger enqueues 20 files per minute and the drain is deliberately serial.
 - **Retry is manual.** A `failed` queue row must be set back to `queued` in Firestore.
@@ -504,10 +517,12 @@ Being honest about what this version does **not** do yet:
 - [ ] **Automated tests** for the comparison rules, the Firestore mapping and the API routes, plus an accuracy check that runs a labelled set of sample emails through the whole pipeline.
 
 ### Medium term (product)
-- [ ] **Real authentication and roles** (moderator, viewer, admin) so the audit logs show real people.
+- [ ] **Real authentication and roles** (moderator, viewer, admin) replacing the demo sign-in, so the audit logs show real people.
 - [ ] **Realtime updates** with Firestore listeners or server-sent events instead of polling.
 - [ ] **Notifications** (email or chat) when a comparison is flagged or a job fails.
 - [ ] **Assignments and SLAs:** assign a review to a person, track time-to-resolution.
+- [ ] **Generate the auto reply** with an LLM from the email and its comparison result.
+- [ ] **A Drive link for every attachment** (not just the SI and BL) so each one can be opened from the email.
 - [ ] **In-app PDF viewer** of the original attachments beside the extracted fields, and export a **discrepancy report** (PDF or CSV).
 - [ ] **Pagination and search server-side** for large inboxes and long audit histories.
 
@@ -534,17 +549,19 @@ Being honest about what this version does **not** do yet:
 │  │  ├─ emails/               GET list
 │  │  │  └─ [id]/review · read    POST moderator actions
 │  │  └─ audit/                GET audit feed
-│  ├─ layout.tsx               Metadata, Open Graph, theme bootstrap
-│  ├─ opengraph-image.tsx · twitter-image.tsx   Link preview image
+│  ├─ layout.tsx               Metadata, Open Graph, theme bootstrap, session-aware shell
 │  └─ globals.css              All styling and the colour schemes
-├─ components/                 Dashboard, Emails, ReviewModal, AuditLog, charts, maps, shell…
+├─ components/                 Landing (front page), LogInButton, Profile (menu), Dashboard, Emails, ReviewModal, AuditLog, charts, maps, shell…
 ├─ lib/
 │  ├─ firestore.ts             Server-only Firestore REST client (OAuth, mapping, moderator actions)
 │  ├─ shipments.ts             Types, the 7 fields, the deterministic UI comparison, date helpers
-│  ├─ audit.ts · theme.ts      Log types and colour scheme registry
+│  ├─ session.ts · printEmail.ts   Demo session cookie, and the A4 print preview
+│  ├─ audit.ts · theme.ts      Log types (and the "Ship AI" bot name) and colour scheme registry
 │  └─ ports.ts · top.ts · …    Port → country mapping, top-N, hooks
+├─ proxy.ts                    Session gate: app pages and /api/* need the demo session
 ├─ n8n/                        ingestion.json · ingestion-trigger.json · ingestion-drain.json
 ├─ public/shiplogo.svg         Logo (vectorised)
+├─ public/opengraph.png        Link preview image (1200×630)
 ├─ .env.example                Environment template
 └─ README.md
 ```

@@ -121,7 +121,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card static fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
+        <div className="card static cmp-card fade-up" style={{ "--d": "0.24s" } as React.CSSProperties}>
           <NavLink href="/emails?view=document-comparison" className="card-link" title="View all comparison requests">
             <div className="card-top">
               <span className="card-title">Total Comparison Requests</span>

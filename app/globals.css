@@ -141,11 +141,22 @@ a.nav-item { text-decoration: none; }
 .nav-item.primary > svg { color: var(--faint); transition: color 0.3s; }
 .nav-item.primary.active > svg { color: var(--ink); }
 /* the user: avatar + name and role, top right of every page (desktop) or of the top bar (phones and small tablets) */
-.profile { display: flex; align-items: center; gap: 12px; min-width: 0; flex-shrink: 0; }
+.profile { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; flex-shrink: 0; }
 .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--solid); color: var(--on-solid); font-weight: 700; font-size: 13px; letter-spacing: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: var(--shadow-sm); }
 .profile-text { min-width: 0; max-width: 200px; }
 .profile h4 { font-size: 13px; line-height: 18px; font-weight: 700; color: var(--ink); }
 .profile small { display: block; font-size: 11px; line-height: 14px; color: var(--muted); }
+/* the profile is a button: it opens a menu with Log out (and, on phones, the name and role) */
+.profile-btn { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 4px 8px 4px 4px; margin: -4px -8px -4px -4px; border-radius: 12px; text-align: left; transition: background 0.15s; }
+.profile-btn:hover, .profile-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.profile-btn .chev { display: flex; color: var(--faint); }
+.pm { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; min-width: 200px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); animation: fade-in 0.15s ease-out; }
+.pm-id { display: none; padding: 8px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pm-id b { display: block; font-size: 14px; line-height: 20px; font-weight: 700; color: var(--ink); }
+.pm-id small { font-size: 12px; line-height: 16px; }
+.pm-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 8px; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--text-3); text-align: left; transition: background 0.15s, color 0.15s; }
+.pm-item:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .pm { animation: none; } }
 /* main + cards */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 8px clamp(12px, 2.4vw, 24px) 24px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
@@ -162,6 +173,7 @@ a.card { text-decoration: none; color: inherit; cursor: pointer; }
 .card.static:hover { box-shadow: var(--shadow-sm); } /* the whole card isn't a link: only the parts inside it are */
 /* the read/unread card is twice as wide as the others: two big numbers over a progress bar of how much is read */
 .cards > .wide { flex: 1.5 1 420px; }
+.cards > .cmp-card { flex-basis: 300px; } /* never squeezed narrower than its two buttons need (Pending Validation and its count overlapped on tablets); it wraps under the first card instead */
 .stats { display: flex; gap: clamp(28px, 6vw, 64px); }
 .stat-label { display: block; margin-top: 2px; font-size: 12px; line-height: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); }
 .progress { margin-top: 14px; height: 12px; border-radius: 9999px; background: var(--track-2); overflow: hidden; }
@@ -183,7 +195,7 @@ a.card-link:hover .card-title { text-decoration: underline; text-underline-offse
 .pill { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; background: var(--bg); color: var(--fg); text-decoration: none; transition: transform 0.15s, box-shadow 0.15s; }
 .pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
 .pill span { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
-.pill b { font-size: 28px; line-height: 32px; font-weight: 800; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.pill b { flex-shrink: 0; font-size: 28px; line-height: 32px; font-weight: 800; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
 .pill.green { --bg: #d1fae5; --fg: #065f46; }
 .pill.red { --bg: #ffe4e6; --fg: #9f1239; }
 /* "you can click this" hints: a small arrow that nudges forward on hover, always visible so touch screens get it too */
@@ -373,6 +385,17 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .review-reasons svg { flex-shrink: 0; margin-top: 2px; }
 .review-reasons ul { margin: 6px 0 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
 .review-reasons li + li { margin-top: 4px; }
+.rr-toggle { display: none; }
+@media (max-width: 900px) {
+  /* phones: the reasons fold away behind a chevron, so the form and documents get the screen */
+  .banner.review-reasons { flex-wrap: nowrap; align-items: flex-start; }
+  .review-reasons > div { flex: 1; }
+  .rr-toggle { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; margin: -6px -8px -6px 0; border-radius: 8px; }
+  .rr-toggle svg { transition: transform 0.2s; transform: rotate(180deg); }
+  .review-reasons.collapsed .rr-toggle svg { transform: none; }
+  .review-reasons.collapsed ul { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .rr-toggle svg { transition: none; } }
 
 .cmp { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .cmp-body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
@@ -464,6 +487,9 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--edge); padding: 8px 12px; border-radius: 8px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-3); }
 .chip svg { color: var(--blue); }
+a.chip { text-decoration: none; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+a.chip:hover { background: var(--surface); border-color: var(--blue); color: var(--ink); }
+a.chip svg:last-child { color: var(--faint); }
 .plain-top { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
 .plain-card h2 { font-size: 24px; line-height: 32px; font-weight: 800; color: var(--ink); }
 .plain-from { font-size: 14px; line-height: 20px; color: var(--muted); margin-top: 4px; }
@@ -526,8 +552,9 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
   .page-head > .profile { display: none; }
   .topbar .profile { margin-left: auto; gap: 10px; }
   .topbar .avatar { width: 36px; height: 36px; font-size: 12px; }
-  .topbar .profile-text { max-width: 150px; }
-  @media (max-width: 420px) { .topbar .handle { display: none; } }
+  .topbar .profile-text, .topbar .chev { display: none; } /* only the avatar in the bar; the menu carries the name */
+  .topbar .pm-id { display: block; }
+  .topbar .profile-btn { padding: 0; margin: 0; }
 
   .sidebar { --sb-rule: var(--line); --sb-hover: var(--surface-2); --sb-active: var(--line); background: var(--surface); border: 1px solid var(--border); position: fixed; top: 0; bottom: 0; left: 0; z-index: 70; width: min(300px, 86vw); overflow-y: auto; border-radius: 0 16px 16px 0; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); box-shadow: var(--shadow-lg); visibility: hidden; transform: translateX(-105%); transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.28s; }
   .drawer-open .sidebar { visibility: visible; transform: none; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s; }
@@ -877,4 +904,24 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 @media (max-width: 560px) {
   .pv-docs { grid-template-columns: minmax(0, 1fr); }
   .site-rules > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+
+/* front page scroll motion: blocks fade in as you scroll them into view (CSS scroll-driven animation: no script, and nothing is hidden where it is unsupported or reduced motion is on) */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    /* opacity only, tied to the scroll position: a block goes from nothing to fully there over the first quarter-screen of scrolling after it appears at the bottom edge */
+    .site-sec h2, .site-why li, .site-steps li, .site-fields li, .site-rules > div, .site-example, .site-feats li, .site-band .site-wrap > * {
+      animation-name: site-fade; animation-duration: 1ms; animation-timing-function: linear; animation-fill-mode: both;
+      animation-timeline: view(); animation-range: cover 0% cover 25%;
+    }
+    @keyframes site-fade { from { opacity: 0; } }
+
+    /* each step's number goes from grey to blue as its row arrives */
+    .site-steps .n { animation: site-num 1ms linear both; animation-timeline: view(); animation-range: cover 5% cover 30%; }
+    @keyframes site-num { from { color: var(--edge-2); } }
+
+    /* reading progress, a thin line under the nav */
+    .site-nav::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--blue); transform-origin: 0 50%; animation: site-progress 1ms linear both; animation-timeline: scroll(root); }
+    @keyframes site-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  }
 }

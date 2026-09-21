@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
-import { logOut } from "@/lib/session";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { Icon } from "./Icon";
 import Profile from "./Profile";
@@ -167,13 +166,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
             <div className="sb-group">
               {!compact && <span className="sb-label">System</span>}
-              <nav className={`sb-nav${hl ? " has-hl" : ""}`}>
-                {navLink(SETTINGS)}
-                <button className="nav-item primary" onClick={logOut} title="Log out">
-                  <Icon d="logout" size={18} />
-                  {!compact && <span>Log out</span>}
-                </button>
-              </nav>
+              <nav className={`sb-nav${hl ? " has-hl" : ""}`}>{navLink(SETTINGS)}</nav>
             </div>
           </div>
         </aside>
