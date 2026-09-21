@@ -291,6 +291,7 @@ Type-check only: `npx tsc --noEmit`
 | `GOOGLE_CLIENT_SECRET` | yes | OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | yes | Refresh token granted with scope `https://www.googleapis.com/auth/datastore` |
 | `FIRESTORE_PROJECT_ID` | no | Defaults to `hokkien` |
+| `N8N_AUTO_REPLY_WEBHOOK_URL` | yes, for auto replies | Production URL of the active n8n `auto-reply` webhook |
 | `NEXT_PUBLIC_SITE_URL` | no | Public address of the deployed site. Used for link previews (Open Graph). Defaults to `http://localhost:3000` |
 
 > **Never commit `.env.local`.** It is already listed in `.gitignore`. Keep secrets out of screenshots, issues and commits.
@@ -307,19 +308,21 @@ Type-check only: `npx tsc --noEmit`
 
 ### 4.5 Set up the ingestion pipeline (n8n)
 
-1. **Import** all three files from [`n8n/`](n8n): `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`.
+1. **Import** the four files from [`n8n/`](n8n): `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`, and `auto-reply.json`.
 2. **Create credentials** in n8n:
 
    | Credential | Used by |
    |------------|---------|
    | Google Drive OAuth2 | Trigger (list files), `ingestion` (download email and attachments) |
    | Google Firebase Cloud Firestore OAuth2 | All three workflows |
-   | Ollama API | `ingestion` (both LLM nodes) |
+   | Google Service Account with Vertex AI access | `ingestion` and `auto-reply` LLM nodes |
 
 3. In `ingestion-drain`, open the **Ingest Email** node and **re-select the `ingestion` workflow** (the export does not carry the workflow id).
 4. Point the Drive nodes at **your** `/inbox` and `/attachments` folders.
-5. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
-6. Drop email JSON files into the Drive `/inbox` folder. Within a minute or two they appear in Firestore, then in the app.
+5. In `auto-reply`, select your Google Vertex credential and project on the **Google Vertex Chat Model** node, then activate the workflow.
+6. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL` and restart the web app.
+7. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
+8. Drop email JSON files into the Drive `/inbox` folder. Within a minute or two they appear in Firestore, then in the app. The auto-reply workflow runs only when a moderator clicks **Generate auto reply**.
 
 **Self-hosted n8n (Docker) tuning**, recommended for large PDF/XLSX files:
 
@@ -543,7 +546,7 @@ Being honest about what this version does **not** do yet:
 │  ├─ shipments.ts             Types, the 7 fields, the deterministic UI comparison, date helpers
 │  ├─ audit.ts · theme.ts      Log types and colour scheme registry
 │  └─ ports.ts · top.ts · …    Port → country mapping, top-N, hooks
-├─ n8n/                        ingestion.json · ingestion-trigger.json · ingestion-drain.json
+├─ n8n/                        ingestion.json · ingestion-trigger.json · ingestion-drain.json · auto-reply.json
 ├─ public/shiplogo.svg         Logo (vectorised)
 ├─ .env.example                Environment template
 └─ README.md

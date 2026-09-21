@@ -126,9 +126,11 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const [pane, setPane] = useState<Pane>("preview");
   const [reply, setReply] = useState<Reply | null>(null);
   const [generating, setGenerating] = useState(false);
+  const replyRequest = useRef<AbortController>(null);
   // Stepping to another email keeps the modal (and the chosen pane) open; only the form belongs to one email, so it restarts here.
   const [shownId, setShownId] = useState(s.id);
   if (shownId !== s.id) {
+    replyRequest.current?.abort();
     setShownId(s.id);
     setSide("bl");
     setForm(s.extractedFields ?? ({} as Fields));
@@ -144,16 +146,33 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const leaving = useRef(false);
   const exitTimer = useRef<number>(undefined);
   useEffect(() => () => clearTimeout(exitTimer.current), []);
-  const replyTimer = useRef<number>(undefined);
-  useEffect(() => () => clearTimeout(replyTimer.current), [s.id]); // a reply still loading belongs to the email it was asked for
-  const generate = () => {
-    clearTimeout(replyTimer.current);
+  useEffect(() => () => replyRequest.current?.abort(), []);
+  const generate = async () => {
+    const request = new AbortController();
+    replyRequest.current = request;
     setGenerating(true);
-    // ponytail: stand-in wait with an empty body; swap for the LLM call, which fills the body when it returns
-    replyTimer.current = window.setTimeout(() => {
-      setReply({ body: "" });
-      setGenerating(false);
-    }, 1500);
+    try {
+      const res = await fetch("/api/auto-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: { id: s.id, subject: s.subject, sender: s.sender, senderName: s.senderName, body: s.emailBody, category: cat.label, attachments: s.attachmentNames },
+          comparison: isCmp ? { si: s.referenceFields, bl: s.extractedFields, discrepancies: s.discrepancies } : undefined,
+        }),
+        signal: request.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not generate a reply");
+      if (typeof data.body !== "string" || !data.body.trim()) throw new Error("n8n returned an empty reply");
+      setReply({ body: data.body.trim() });
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") onToast(`Reply generation failed: ${(error as Error).message}`);
+    } finally {
+      if (replyRequest.current === request) {
+        replyRequest.current = null;
+        setGenerating(false);
+      }
+    }
   };
   const leave = (then: () => void) => {
     if (leaving.current) return; // already on its way out (a second click or key press)
