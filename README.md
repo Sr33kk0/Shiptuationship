@@ -422,7 +422,7 @@ The web app is where "ask for help" happens.
   3. Write **`review.fields`** (BL) or **`review.si_fields`** (SI) with a **nested `updateMask`**, so saving one side keeps the other side's override.
   4. Add an **`activity`** document (who, what, before and after, server timestamp) **in the same atomic commit**, guarded by the document's `updateTime` so concurrent edits are rejected instead of overwritten.
 - **Read state:** "Mark as read" is stored separately from the comparison status (`read_status`), is idempotent, and drives the Gmail-style bold and dot in the inbox and the dashboard's read/unread progress.
-- **Identity:** the app runs as a **preset moderator (`DanielHo`)**. There is no login screen in this version, and everyone is attributed to that identity. Existing records without attribution stay "unknown" and are never retro-assigned.
+- **Identity:** the app runs as a **preset moderator (`DanielHo`)**. The front page's **Log in** button is a one-click demo sign-in (a session cookie, see `lib/session.ts` and `proxy.ts`), not real authentication, and everyone is attributed to that identity. Existing records without attribution stay "unknown" and are never retro-assigned.
 
 ### 5.5 Audit logs
 
@@ -485,7 +485,7 @@ Being honest about what this version does **not** do yet:
 - **No OCR or vision.** Image-only or scanned PDFs are not read. PDF handling is text extraction, so those cases surface as errors or incomplete comparisons for a human.
 - **Two comparison rules.** The pipeline compares **normalised** values (formatting differences are tolerated). The web app's live highlight and re-comparison on save uses **exact** text equality on the seven fields, so it can flag a formatting-only difference that n8n deliberately ignored.
 - **`incomplete` and `needs_review` are not yet surfaced.** They are stored (with `human_review_required`) but the inbox shows them as "Received"; only `flagged` and `cleared` get their own view.
-- **No login.** All moderator actions are attributed to one preset identity (`DanielHo`).
+- **No real login.** The front page's **Log in** and the sidebar's **Log out** only set and clear a demo session cookie. All moderator actions are attributed to one preset identity (`DanielHo`).
 - **Polling, not push.** The UI refreshes every 30 s rather than streaming Firestore changes.
 - **Limits of scale.** The email list reads one page (up to 300 documents) and the User Log one page (up to 500 activity records). The Drive trigger enqueues 20 files per minute and the drain is deliberately serial.
 - **Retry is manual.** A `failed` queue row must be set back to `queued` in Firestore.
@@ -525,7 +525,8 @@ Being honest about what this version does **not** do yet:
 ```
 .
 ├─ app/                        Next.js App Router
-│  ├─ page.tsx                 Dashboard
+│  ├─ page.tsx                 Front page (product site) for logged-out visitors
+│  ├─ dashboard/               Dashboard
 │  ├─ emails/                  Inbox page
 │  ├─ audit/user · audit/system    User Log and System Log
 │  ├─ settings/                Colour schemes

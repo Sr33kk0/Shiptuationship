@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree } from "next/font/google";
+import { cookies } from "next/headers";
 import Shell from "@/components/Shell";
+import { SESSION_COOKIE } from "@/lib/session";
 import { ShipmentsProvider } from "@/lib/useShipments";
 import "./globals.css";
 
@@ -25,7 +27,8 @@ export const metadata: Metadata = {
 // device-width + viewport-fit=cover: use the full screen on phones with notches (the shell pads for the safe areas)
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f5f5f7" };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const loggedIn = (await cookies()).has(SESSION_COOKIE); // the app shell (and its data fetching) only exists once logged in; the front page renders bare
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -33,9 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("shiptuationship-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}` }} />
       </head>
       <body className={figtree.variable}>
-        <ShipmentsProvider>
-          <Shell>{children}</Shell>
-        </ShipmentsProvider>
+        {loggedIn ? (
+          <ShipmentsProvider>
+            <Shell>{children}</Shell>
+          </ShipmentsProvider>
+        ) : (
+          children
+        )}
       </body>
     </html>
   );
