@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { KINDS, SOURCES, type AuditEvent, type AuditSource } from "@/lib/audit";
+import { BOT_NAME, KINDS, SOURCES, type AuditEvent, type AuditSource } from "@/lib/audit";
 import FilterMenu, { type FilterOption } from "./FilterMenu";
 import { Icon } from "./Icon";
 import Profile from "./Profile";
@@ -152,7 +152,7 @@ export default function AuditLog({ source }: { source: AuditSource }) {
                   {divider && <div className="day"><span>{dayLabel(day)}</span></div>}
                   <div className="ev">
                     <div className="ev-avatar" style={e.bot ? undefined : ({ "--h": hue(e.actor) } as React.CSSProperties)} data-bot={e.bot || undefined}>
-                      {e.bot ? <Icon d="ship" size={18} /> : initials(e.actor)}
+                      {e.bot ? <img src="/shiplogo.svg" alt="" /> : initials(e.actor)}
                       <span className="ev-badge" style={{ background: kind.color }} title={kind.label}>
                         <Icon d={kind.icon} size={10} sw={3} />
                       </span>
@@ -160,7 +160,7 @@ export default function AuditLog({ source }: { source: AuditSource }) {
                     <div className="ev-main">
                       <div className="ev-top">
                         <span className="ev-who">
-                          <b>{e.actor}</b>
+                          <b>{e.bot ? BOT_NAME : e.actor}</b>
                           {e.bot && <span className="bot">BOT</span>}
                         </span>
                         <span className="ev-text">{verb(e)}</span>

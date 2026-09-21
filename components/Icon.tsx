@@ -24,6 +24,8 @@ export const PATH = {
   sortNone: "M8 9l4-4 4 4m0 6l-4 4-4-4",
   sortAsc: "M5 15l7-7 7 7",
   sortDesc: "M19 9l-7 7-7-7",
+  logout: "M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1",
+  print: "M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z",
 };
 
 export function Icon({ d, size = 16, sw = 1.8 }: { d: keyof typeof PATH; size?: number; sw?: number }) {
