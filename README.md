@@ -12,7 +12,7 @@ Shiptuationship reads every incoming email, works out what it is, compares the S
 | | |
 |---|---|
 | **Live app (Vercel)** | https://shiptuationship.vercel.app/ |
-| **Demo video** | https://YOUR-DEMO-VIDEO-LINK |
+| **Demo video** | https://drive.google.com/file/d/16mQEl91U26bzys1ujr6VD80rN4o-Y6a7/view?usp=sharing |
 | **Test it by email** | [Send a test email](mailto:syho81336.ho+ship@gmail.com?subject=Document%20check%20request) |
 | **Test it by upload** | [Drop a test file into the Drive `/inbox` and `/attachments` folder](https://drive.google.com/drive/folders/1LqdG7w1Sy2AvcCPYbrJbCBRO2JoWrTKK) |
 
