@@ -126,50 +126,15 @@ Shiptuationship has **two halves** that share one database:
 
 ### 3.1 Big picture
 
-```mermaid
-flowchart LR
-    subgraph SRC["Sources"]
-        GMAIL[("Gmail<br/>+ship label")]
-        DRIVE[("Google Drive<br/>/inbox (email JSON)<br/>/attachments (SI, BL files)")]
-    end
+<img src="public/architecture.svg" alt="Shiptuationship system architecture: Gmail and Google Drive feed n8n workflows that classify emails, extract fields with Vertex AI, compare SI against BL and write to Firestore, which the Next.js operator desk reads and writes through its route handlers." width="100%" /> <br/>
 
-    subgraph N8N["n8n - automation"]
-        G2D["gmail-ship-to-drive<br/>every 1 min, optional"]
-        TRIG["ingestion-trigger<br/>every 1 min"]
-        DRAIN["ingestion-drain<br/>every 1 min"]
-        ING["ingestion<br/>classify, extract, compare"]
-        AR["auto-reply<br/>webhook, on demand"]
-        LLM(["Google Vertex AI<br/>gemini-3.5-flash-lite"])
-    end
+- **n8n pipeline overview** — from a `+ship` email arriving to the row landing in Firestore, plus the separate auto-reply webhook:
 
-    subgraph DB["Firestore (project: hokkien)"]
-        Q[("ingestion_queue")]
-        E[("emails/{email_id}")]
-        ACT[("emails/{id}/activity")]
-        MOD[("moderators")]
-    end
+<img src="public/n8n-overview.svg" alt="n8n pipeline overview: a +ship email is copied to Drive, queued in Firestore, ingested one email at a time by the drain, and written back to Firestore; a separate webhook lets the web app request an auto-reply draft." width="100%" /> <br/>
 
-    subgraph WEB["Next.js web app"]
-        API["Route handlers<br/>/api/emails · /api/audit · /api/auto-reply"]
-        UI["Front page · Dashboard · Emails · Review<br/>User Log · System Log · Settings"]
-    end
+- **Inside the ingestion workflow** — one email in: classify it, loop over each attachment to fetch, extract and normalise it (flagging failures for a human instead of guessing), then compare BL against SI:
 
-    GMAIL -->|poll, label filter| G2D
-    G2D -->|upload manifest + attachments| DRIVE
-    DRIVE -->|files.list, capped at 20| TRIG
-    TRIG -->|enqueue| Q
-    Q -->|claim 1 at a time| DRAIN
-    DRAIN --> ING
-    ING <-->|prompts| LLM
-    ING -->|downloads| DRIVE
-    ING -->|write classification, si, bl, comparison| E
-    API <-->|REST + OAuth2 refresh token| E
-    API --> ACT
-    API --> MOD
-    API -->|POST email + comparison| AR
-    AR <-->|prompt| LLM
-    UI <-->|fetch, 30 s poll| API
-```
+<img src="public/n8n-ingestion.svg" alt="n8n ingestion workflow: read and classify the email, then for each attachment fetch it, extract its text, and normalise and validate its fields, flagging any failure for human review, before comparing the BL against the SI once every attachment is done." width="100%" /> <br/>
 
 ### 3.2 End-to-end flow of one email
 
