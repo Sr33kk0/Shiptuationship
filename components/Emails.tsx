@@ -155,7 +155,7 @@ export default function Emails() {
               <Link key={f.key} href={href(f.key)} replace scroll={false} className="filter" aria-current={filter === f.key ? "page" : undefined} style={{ "--c": f.c, "--a": f.a, "--t": f.t } as React.CSSProperties}>
                 {f.label}
                 {loadState !== "loading" && ` (${count(f.key)})`}
-                {f.key === "document-comparison" && shipments.some((s) => s.category === f.key && s.status === "discrepancy") && <span className="dot" />}
+                {shipments.some((s) => (f.key === "all" || s.category === f.key) && s.status === "discrepancy") && <span className="dot" role="img" aria-label="Needs Review" />}
               </Link>
             ))}
           </div>
