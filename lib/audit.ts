@@ -5,8 +5,8 @@ export interface AuditEvent {
   id: string;
   at: string; // ISO timestamp
   kind: AuditKind;
-  actor: string; // display name, or "n8n Workflow" for the automation
-  bot: boolean; // true = the n8n automation rather than a person
+  actor: string; // display name of the person; for the automation (bot) show BOT_NAME instead
+  bot: boolean; // true = the automation rather than a person
   emailId: string;
   subject: string;
   detail: string; // classification name / comparison status / "BL" or "SI" for a review / ""
@@ -21,9 +21,12 @@ export const KINDS: Record<AuditKind, { label: string; color: string; icon: "doc
   marked_read: { label: "Marked read", color: "#d97706", icon: "doc" },
 };
 
-// The two logs: what people did, and what the n8n workflow did on its own. Each has its own page and its own action filter.
+// How the automation is named on screen.
+export const BOT_NAME = "Ship AI";
+
+// The two logs: what people did, and what the automation did on its own. Each has its own page and its own action filter.
 export type AuditSource = "user" | "system";
 export const SOURCES: Record<AuditSource, { title: string; blurb: string; kinds: AuditKind[] }> = {
   user: { title: "User Log", blurb: "Actions taken by moderators, newest first.", kinds: ["review_saved", "marked_read"] },
-  system: { title: "System Log", blurb: "What the n8n workflow did automatically, newest first.", kinds: ["classified", "compared"] },
+  system: { title: "System Log", blurb: "What Ship AI did automatically, newest first.", kinds: ["classified", "compared"] },
 };

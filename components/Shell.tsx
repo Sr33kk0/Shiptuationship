@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
+import { logOut } from "@/lib/session";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { Icon } from "./Icon";
 import Profile from "./Profile";
@@ -32,7 +33,7 @@ export function NavLink({ href, onClick, ...props }: ComponentProps<typeof Link>
 }
 
 const PAGES = [
-  { href: "/", label: "Dashboard Overview", icon: "dashboard" },
+  { href: "/dashboard", label: "Dashboard Overview", icon: "dashboard" },
   { href: "/emails", label: "Emails", icon: "mail" },
   { href: "/audit/user", label: "User Log", icon: "user" },
   { href: "/audit/system", label: "System Log", icon: "chip" },
@@ -123,7 +124,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <button className="topbar-btn" onClick={() => setDrawer(true)} aria-label="Open menu" aria-expanded={drawer} aria-controls="sidebar">
             <Icon d="menu" size={22} sw={2} />
           </button>
-          <NavLink href="/" className="topbar-home" aria-label="Shiptuationship, go to the dashboard">
+          <NavLink href="/dashboard" className="topbar-home" aria-label="Shiptuationship, go to the dashboard">
             <div className="logo sm">
               <img src="/shiplogo.svg" alt="" />
             </div>
@@ -137,14 +138,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div className="sb-body" ref={menuRef}>
             {hl && <span className="nav-hl" style={{ transform: `translateY(${hl.y}px)`, height: hl.h }} />}
             <div className="sb-head">
-              <NavLink href="/" className="brand" title="Go to the dashboard" aria-label="Shiptuationship, go to the dashboard">
+              <NavLink href="/dashboard" className="brand" title="Go to the dashboard" aria-label="Shiptuationship, go to the dashboard">
                 <div className="logo">
                   <img src="/shiplogo.svg" alt="" />
                 </div>
                 {!compact && (
                   <div style={{ minWidth: 0 }}>
                     <h2 className="trunc">Shiptuationship</h2>
-                    <small className="trunc">SI &amp; BL Verification Desk</small>
+                    <small className="trunc">AI Logistics Assistant</small>
                   </div>
                 )}
               </NavLink>
@@ -166,7 +167,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
             <div className="sb-group">
               {!compact && <span className="sb-label">System</span>}
-              <nav className={`sb-nav${hl ? " has-hl" : ""}`}>{navLink(SETTINGS)}</nav>
+              <nav className={`sb-nav${hl ? " has-hl" : ""}`}>
+                {navLink(SETTINGS)}
+                <button className="nav-item primary" onClick={logOut} title="Log out">
+                  <Icon d="logout" size={18} />
+                  {!compact && <span>Log out</span>}
+                </button>
+              </nav>
             </div>
           </div>
         </aside>
