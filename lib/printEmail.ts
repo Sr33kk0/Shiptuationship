@@ -32,7 +32,7 @@ const row = (k: string, v: string) => (v ? `<tr><th>${k}</th><td>${esc(v)}</td><
 
 function page(s: Shipment) {
   const cmp = s.category === "document-comparison" && s.referenceFields && s.extractedFields ? { si: s.referenceFields, bl: s.extractedFields } : null;
-  const title = `${cmp ? "Manifest Inspection" : "Email Transmission"} — ${s.id}`;
+  const title = s.id;
   const from = s.senderName ? `${s.senderName} <${s.sender}>` : s.sender;
 
   const meta = [
