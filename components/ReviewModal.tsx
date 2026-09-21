@@ -179,6 +179,18 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
           </div>
         </div>
 
+        {s.status === "discrepancy" && (
+          <section className="banner review-reasons" aria-label="Human review reasons">
+            <div>
+              <Icon d="alert" sw={2} />
+              <div>
+                <strong>Human review required</strong>
+                <ul>{s.reviewReasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
+              </div>
+            </div>
+          </section>
+        )}
+
         {isCmp && si && bl ? (
           <div className="cmp">
             {s.status === "discrepancy" && s.discrepancies.length > 0 && (

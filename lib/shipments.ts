@@ -37,6 +37,7 @@ export interface Shipment {
   rawDate: string;
   at: string; // ISO timestamp of the same moment as `date` ("" if unknown); sorts by time, not just day
   status: Status;
+  reviewReasons: string[];
   reviewedBy: string;
   reviewedAt: string;
   isRead: boolean;

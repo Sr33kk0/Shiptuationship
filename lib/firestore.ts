@@ -84,10 +84,24 @@ const CATEGORY: Record<string, Category> = {
   "General Messages": "general",
 };
 
-// ponytail: needs_review / incomplete show as pending; split later if operators need them surfaced.
-const STATUS: Record<string, Status> = { flagged: "discrepancy", cleared: "clean" };
+const STATUS: Record<string, Status> = { flagged: "discrepancy", needs_review: "discrepancy", incomplete: "discrepancy", cleared: "clean" };
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+
+// Also explains older records that predate persisted review reasons.
+function ingestionReasons(doc: Doc): string[] {
+  const reasons: string[] = [];
+  if (doc.missing_attachments_warning) reasons.push(str(doc.missing_attachments_warning));
+  if (doc.classification_error) reasons.push(`Email classification failed: ${str(doc.classification_error)}`);
+  const error = doc.last_ingestion_error as Doc | undefined;
+  if (error) reasons.push(`Attachment ${str(error.filename) || '(unknown file)'} could not be processed: ${str(error.message) || 'No readable document data.'}`);
+  const attachments = Array.isArray(doc.attachments) ? doc.attachments : [];
+  if (!attachments.length && !doc.missing_attachments_warning &&
+      (doc.classification === 'Document-Comparison Request' || /\battach(?:ed|ments?)\b/i.test(str(doc.body)))) {
+    reasons.push('No attachments were provided. Request the missing documents from the sender.');
+  }
+  return reasons;
+}
 
 function toFields(map: unknown): Fields | null {
   if (!map || typeof map !== "object") return null;
@@ -129,11 +143,26 @@ export function toShipment(doc: Doc): Shipment {
     });
 
   const attachments = (doc.attachments as string[] | undefined) ?? [];
-  const status = STATUS[str(doc.status)] ?? "pending";
+  const blockers = ingestionReasons(doc);
+  const status = blockers.length || doc.human_review_required === true ? "discrepancy" : STATUS[str(doc.status)] ?? "pending";
+  const reviewReasons = status === "discrepancy" ? [...new Set([
+    ...(Array.isArray(doc.human_review_reasons) ? doc.human_review_reasons.filter((r): r is string => typeof r === 'string' && !!r.trim()) : []),
+    ...blockers,
+  ])] : [];
+  if (status === 'discrepancy' && !reviewReasons.length) {
+    if (doc.classification === 'Document-Comparison Request') {
+      for (const [key, label] of [['bl', 'Bill of Lading'], ['si', 'Shipping Instruction']] as const) {
+        if (!doc[key]) reviewReasons.push(`${label} is missing or could not be extracted. Supply a readable document and reprocess the email.`);
+      }
+    }
+    for (const d of discrepancies) reviewReasons.push(`${d.label}: SI ${d.si || '(missing)'}; BL ${d.bl || '(missing)'}. Verify the difference or missing value.`);
+    if (!reviewReasons.length) reviewReasons.push('This record was flagged for human review without a recorded reason. Inspect the source email and processing history.');
+  }
 
   const trail: { at: string; action: string }[] = [];
   if (doc.classified_at) trail.push({ at: str(doc.classified_at), action: `Classified as ${str(doc.classification)}` });
   if (comparison.performed_at) trail.push({ at: str(comparison.performed_at), action: `Auto-comparison: ${str(comparison.status)}` });
+  if (reviewReasons.length) trail.push({ at: str((doc.last_ingestion_error as Doc | undefined)?.occurred_at ?? comparison.performed_at ?? doc.classified_at), action: `Human review required: ${reviewReasons.join(' ')}` });
   if (review?.reviewed_at) {
     const edited = review.edited_side ? `${str(review.edited_side).toUpperCase()} edited, ` : "";
     trail.push({ at: str(review.reviewed_at), action: `Manual verification saved by ${str(review.reviewed_by) || "unknown reviewer"} (${edited}${status === "clean" ? "all matched & cleared" : "override flagged"})` });
@@ -151,6 +180,7 @@ export function toShipment(doc: Doc): Shipment {
     rawDate,
     at,
     status,
+    reviewReasons,
     reviewedBy: str(review?.reviewed_by),
     reviewedAt: str(review?.reviewed_at),
     isRead: read?.is_read === true,
@@ -211,15 +241,19 @@ export async function saveModeratorAction(id: string, fields?: Fields, side: Sid
   }
   const saved = side === "si" ? current.referenceFields : current.extractedFields; // the side being edited
   const other = side === "si" ? current.extractedFields : current.referenceFields; // the side it is compared against
-  const flagged = fields ? mismatches(fields, other!).length > 0 : false;
+  const different = fields ? mismatches(fields, other!) : [];
+  const blockers = ingestionReasons(before);
+  const reviewReasons = fields ? [...blockers, ...different.map(key => `${FIELDS.find(f => f.key === key)!.label} differs between SI and BL after manual verification.`)] : [];
+  const flagged = reviewReasons.length > 0;
   const reviewKey = side === "si" ? "si_fields" : "fields";
   const updates: Doc = fields ? {
     review: { reviewed_by: MODERATOR, edited_side: side, [reviewKey]: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
-    status: flagged ? "flagged" : "cleared",
+    status: blockers.length ? "needs_review" : flagged ? "flagged" : "cleared",
     human_review_required: flagged,
+    human_review_reasons: reviewReasons,
   } : { read_status: { is_read: true, marked_by: MODERATOR } };
   // Nested paths for `review`, so saving one side keeps the other side's override.
-  const mask = fields ? ["review.reviewed_by", "review.edited_side", `review.${reviewKey}`, "status", "human_review_required"] : Object.keys(updates);
+  const mask = fields ? ["review.reviewed_by", "review.edited_side", `review.${reviewKey}`, "status", "human_review_required", "human_review_reasons"] : Object.keys(updates);
   const timeField = fields ? "review.reviewed_at" : "read_status.marked_at";
   const changes: Doc = fields ? Object.fromEntries(FIELDS
     .filter((f) => saved?.[f.key] !== fields[f.key])
@@ -247,7 +281,7 @@ export async function saveModeratorAction(id: string, fields?: Fields, side: Sid
       action: fields ? "review_saved" : "marked_read",
       edited_side: fields ? side : null,
       changes,
-      before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null } : { read_status: before.read_status ?? null },
+      before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null, human_review_reasons: before.human_review_reasons ?? [] } : { read_status: before.read_status ?? null },
       after: updates,
     }) },
     currentDocument: { exists: false },

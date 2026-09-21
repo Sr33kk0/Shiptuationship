@@ -268,6 +268,11 @@ td[colspan] { padding: 64px 0; text-align: center; color: var(--faint); }
 .banner { background: #fff1f2; border-bottom: 1px solid #fecdd3; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; line-height: 20px; color: #9f1239; flex-shrink: 0; }
 .banner > div { display: flex; align-items: center; gap: 10px; }
 .banner svg { color: var(--rose); }
+.review-reasons { max-height: 30vh; overflow-y: auto; }
+.review-reasons > div { align-items: flex-start; min-width: 0; }
+.review-reasons svg { flex-shrink: 0; margin-top: 2px; }
+.review-reasons ul { margin: 6px 0 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
+.review-reasons li + li { margin-top: 4px; }
 .banner em { font-style: normal; white-space: nowrap; font-size: 12px; line-height: 16px; font-weight: 700; color: #be123c; background: rgba(255, 228, 230, 0.9); border: 1px solid rgba(253, 164, 175, 0.8); padding: 4px 10px; border-radius: 6px; }
 
 .cmp { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
