@@ -144,6 +144,13 @@ export function toShipment(doc: Doc): Shipment {
     });
 
   const attachments = (doc.attachments as string[] | undefined) ?? [];
+  // n8n stores a Drive link on each of the two source maps it extracts from (`si_source`, `bl_source`); other attachments have only a name.
+  const attachmentLinks: Record<string, string> = {};
+  for (const src of [doc.si_source, doc.bl_source] as (Doc | undefined)[]) {
+    const id = str(src?.drive_file_id);
+    const link = str(src?.drive_link) || (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : "");
+    if (str(src?.filename) && link.startsWith("https://drive.google.com/")) attachmentLinks[str(src?.filename)] = link;
+  }
   const blockers = ingestionReasons(doc);
   const status = blockers.length || doc.human_review_required === true ? "discrepancy" : STATUS[str(doc.status)] ?? "pending";
   const reviewReasons = status === "discrepancy" ? [...new Set([
@@ -189,6 +196,7 @@ export function toShipment(doc: Doc): Shipment {
     markedReadAt: str(read?.marked_at),
     attachmentCount: attachments.length,
     attachmentNames: attachments,
+    attachmentLinks,
     emailBody: str(doc.body),
     siRef: str((doc.si_source as Doc | undefined)?.filename) || undefined,
     blRef: str((doc.bl_source as Doc | undefined)?.filename) || undefined,

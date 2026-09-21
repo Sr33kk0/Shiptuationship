@@ -45,6 +45,7 @@ export interface Shipment {
   markedReadAt: string;
   attachmentCount: number;
   attachmentNames: string[];
+  attachmentLinks: Record<string, string>; // file name → its Google Drive link; only the SI and BL files have one
   emailBody: string;
   siRef?: string;
   blRef?: string;

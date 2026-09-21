@@ -54,18 +54,27 @@ function Paper({ kind, refNo, values, bad }: { kind: "si" | "bl"; refNo?: string
   );
 }
 
-function Attachments({ names, heading }: { names: string[]; heading: string }) {
+// A file with a stored Google Drive link (the SI and BL) opens it in a new tab; any other attachment is only a name.
+function Attachments({ names, links, heading }: { names: string[]; links: Record<string, string>; heading: string }) {
   if (!names.length) return null;
   return (
     <div className="attach">
       <span className="k">{heading}</span>
       <div className="chips">
-        {names.map((n, i) => (
-          <div key={n} className="chip" style={{ "--i": i } as React.CSSProperties}>
-            <Icon d="doc" />
-            <span>{n}</span>
-          </div>
-        ))}
+        {names.map((n, i) =>
+          links[n] ? (
+            <a key={n} className="chip" href={links[n]} target="_blank" rel="noopener noreferrer" title={`Open ${n} in Google Drive`} style={{ "--i": i } as React.CSSProperties}>
+              <Icon d="doc" />
+              <span>{n}</span>
+              <Icon d="external" size={12} sw={2} />
+            </a>
+          ) : (
+            <div key={n} className="chip" style={{ "--i": i } as React.CSSProperties}>
+              <Icon d="doc" />
+              <span>{n}</span>
+            </div>
+          ),
+        )}
       </div>
     </div>
   );
@@ -127,6 +136,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const [reply, setReply] = useState<Reply | null>(null);
   const [generating, setGenerating] = useState(false);
   const replyRequest = useRef<AbortController>(null);
+  const [reasonsOpen, setReasonsOpen] = useState(true); // phones only: the review reasons can be folded away (the button is hidden, and the fold ignored, on desktop)
   // Stepping to another email keeps the modal (and the chosen pane) open; only the form belongs to one email, so it restarts here.
   const [shownId, setShownId] = useState(s.id);
   if (shownId !== s.id) {
@@ -276,21 +286,25 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
         </div>
 
         {s.status === "discrepancy" && (
-          <section className="banner review-reasons" aria-label="Human review reasons">
+          <section className={`banner review-reasons${reasonsOpen ? "" : " collapsed"}`} aria-label="Human review reasons">
             <div>
               <Icon d="alert" sw={2} />
               <div>
                 <strong>Human review required</strong>
-                <ul>{s.reviewReasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
+                <ul id="review-reasons-list">{s.reviewReasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
               </div>
             </div>
+            <button className="rr-toggle" onClick={() => setReasonsOpen(!reasonsOpen)} aria-expanded={reasonsOpen} aria-controls="review-reasons-list" aria-label={reasonsOpen ? "Hide review reasons" : "Show review reasons"}>
+              <Icon d="chevD" size={18} sw={2.2} />
+            </button>
           </section>
         )}
 
         {isCmp && si && bl ? (
           <div className="cmp">
             <div className="cmp-body">
-              {formOpen && (
+              {/* the form only belongs with the documents; reading the email gets the whole window (edits are kept while it is hidden) */}
+              {formOpen && pane === "preview" && (
                 <div className="form-pane">
                   <div className="form-head">
                     <b>Manifest Fields</b>
@@ -385,7 +399,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                         </div>
                       </div>
                       <div className="email-body">{s.emailBody}</div>
-                      <Attachments names={s.attachmentNames} heading={`Attachments (${s.attachmentNames.length})`} />
+                      <Attachments names={s.attachmentNames} links={s.attachmentLinks} heading={`Attachments (${s.attachmentNames.length})`} />
                     </div>
                     <button className="btn dark reply-btn" disabled={generating} onClick={generate}>
                       {reply ? "Regenerate auto reply" : "Generate auto reply"}
@@ -412,7 +426,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                 </div>
               </div>
               <div className="email-body boxed">{s.emailBody}</div>
-              <Attachments names={s.attachmentNames} heading="Attached Files" />
+              <Attachments names={s.attachmentNames} links={s.attachmentLinks} heading="Attached Files" />
               <AutoReply reply={reply} generating={generating} onChange={setReply} onCopy={copy} />
             </div>
             <div className="plain-foot">
