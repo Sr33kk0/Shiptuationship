@@ -1,16 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { logIn } from "@/lib/session";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import LogInButton from "@/components/LogInButton";
 
-vi.mock("@/lib/session", () => ({ logIn: vi.fn() }));
-
 describe("LogInButton", () => {
-  it("logs in when clicked", () => {
+  it("links to the log in page", () => {
     render(<LogInButton className="site-btn">Log in</LogInButton>);
-    const button = screen.getByRole("button", { name: "Log in" });
-    expect(button.className).toBe("site-btn");
-    fireEvent.click(button);
-    expect(logIn).toHaveBeenCalledTimes(1);
+    const link = screen.getByRole("link", { name: "Log in" });
+    expect(link.className).toBe("site-btn");
+    expect(link.getAttribute("href")).toBe("/login");
   });
 });

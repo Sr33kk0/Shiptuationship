@@ -10,6 +10,7 @@ import DashboardPage from "@/app/dashboard/page";
 import EmailsPage from "@/app/emails/page";
 import RootLayout, { metadata, viewport } from "@/app/layout";
 import HomePage from "@/app/page";
+import LoginPage from "@/app/login/page";
 import SettingsPage from "@/app/settings/page";
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -20,6 +21,7 @@ vi.mock("@/components/Dashboard", () => ({ default: () => <main>dashboard</main>
 vi.mock("@/components/Emails", () => ({ default: () => <main>emails</main> }));
 vi.mock("@/components/Settings", () => ({ default: () => <main>settings</main> }));
 vi.mock("@/components/Landing", () => ({ default: () => <main>landing</main> }));
+vi.mock("@/components/LogIn", () => ({ default: () => <main>login</main> }));
 vi.mock("@/components/Shell", () => ({ default: ({ children }: { children: ReactNode }) => <div className="shell">{children}</div> }));
 vi.mock("@/lib/useShipments", () => ({ ShipmentsProvider: ({ children }: { children: ReactNode }) => <div className="provider">{children}</div> }));
 
@@ -53,6 +55,18 @@ describe("app pages", () => {
   it("send logged-in visitors from the front page to the dashboard", async () => {
     loggedIn(true);
     await HomePage();
+    expect(redirect).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("show the log in form to logged-out visitors", async () => {
+    loggedIn(false);
+    expect(html((await LoginPage())!)).toBe("<main>login</main>");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("send logged-in visitors from the log in page to the dashboard", async () => {
+    loggedIn(true);
+    await LoginPage();
     expect(redirect).toHaveBeenCalledWith("/dashboard");
   });
 });
