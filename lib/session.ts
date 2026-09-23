@@ -1,13 +1,40 @@
-// A demo sign-in, not real authentication: the app has no user database and every action is attributed to one preset moderator.
-// The cookie only decides whether a visitor sees the front page or the app, and lets proxy.ts keep logged-out visitors off the app pages and the data API.
-export const SESSION_COOKIE = "shiptuationship-session";
+// Server-only: the signed session cookie and moderator passwords. Never import this from a client component.
+// There is no sign-up: a moderator is a `moderators/{id}` document in Firestore with an `email` and a `password_hash`
+// (made with `npm run hash-password`), and logging in (app/api/session) checks the password against that hash.
+import { createHmac, scryptSync, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
 
-export function logIn() {
-  document.cookie = `${SESSION_COOKIE}=1; path=/; samesite=lax`; // no max-age: the session ends when the browser closes
-  window.location.assign("/dashboard"); // a full load, so the server renders the app instead of the front page
+export const SESSION_COOKIE = "shiptuationship-session";
+const TTL = 12 * 60 * 60 * 1000; // ponytail: a copied cookie stops working after 12 h; no server-side revocation, keep a session list in Firestore if one is needed
+
+export type Moderator = { id: string; name: string };
+
+function sign(payload: string) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) throw new Error("Missing SESSION_SECRET (32+ characters) in .env.local");
+  return createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-export function logOut() {
-  document.cookie = `${SESSION_COOKIE}=; path=/; max-age=0`;
-  window.location.assign("/");
+const same = (a: Buffer, b: Buffer) => a.length === b.length && timingSafeEqual(a, b);
+
+// The cookie value: the moderator and an expiry, signed so it cannot be edited or made up.
+export function createSession(moderator: Moderator): string {
+  const payload = Buffer.from(JSON.stringify({ ...moderator, exp: Date.now() + TTL })).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
+// The moderator a cookie belongs to, or null when it is missing, forged or expired.
+export function readSession(value: string | undefined): Moderator | null {
+  const [payload, sig] = (value ?? "").split(".");
+  if (!payload || !sig || !same(Buffer.from(sig), Buffer.from(sign(payload)))) return null;
+  const { id, name, exp } = JSON.parse(Buffer.from(payload, "base64url").toString());
+  return exp > Date.now() ? { id, name } : null;
+}
+
+export const currentModerator = async () => readSession((await cookies()).get(SESSION_COOKIE)?.value);
+
+// `password_hash` is "salt:hash" in hex, scrypt with a 64-byte key: the format `npm run hash-password -- "<password>"` prints.
+export function checkPassword(password: string, stored: string) {
+  const [salt, hash] = stored.split(":");
+  return !!salt && !!hash && same(Buffer.from(hash, "hex"), scryptSync(password, salt, 64));
 }

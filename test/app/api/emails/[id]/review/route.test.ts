@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { saveModeratorAction } from "@/lib/firestore";
+import { currentModerator } from "@/lib/session";
 import { fields } from "@/test/fixtures";
 import { POST, dynamic } from "@/app/api/emails/[id]/review/route";
 
 vi.mock("@/lib/firestore", () => ({ saveModeratorAction: vi.fn() }));
+vi.mock("@/lib/session", () => ({ currentModerator: vi.fn() }));
 const save = vi.mocked(saveModeratorAction);
 const post = (body: unknown, id = "email_001") =>
   POST(new Request(`http://localhost/api/emails/${id}/review`, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) }), { params: Promise.resolve({ id }) });
@@ -13,6 +15,7 @@ const error = async (res: Response) => ((await res.json()) as { error: string })
 beforeEach(() => {
   save.mockReset();
   save.mockResolvedValue({ id: "email_001" } as never);
+  vi.mocked(currentModerator).mockResolvedValue({ id: "DanielHo", name: "Daniel Ho" });
 });
 
 describe("POST /api/emails/[id]/review", () => {
@@ -24,12 +27,19 @@ describe("POST /api/emails/[id]/review", () => {
     const res = await post({ fields: fields() });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "email_001" });
-    expect(save).toHaveBeenCalledWith("email_001", fields(), "bl");
+    expect(save).toHaveBeenCalledWith("DanielHo", "email_001", fields(), "bl");
   });
 
   it("saves the SI side when asked", async () => {
     await post({ fields: fields(), side: "si" });
-    expect(save).toHaveBeenCalledWith("email_001", fields(), "si");
+    expect(save).toHaveBeenCalledWith("DanielHo", "email_001", fields(), "si");
+  });
+
+  it("refuses without a valid session", async () => {
+    vi.mocked(currentModerator).mockResolvedValue(null);
+    const res = await post({ fields: fields() });
+    expect([res.status, await error(res)]).toEqual([401, "Log in to continue"]);
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("rejects a bad id", async () => {

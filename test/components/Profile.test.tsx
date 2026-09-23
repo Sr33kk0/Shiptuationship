@@ -1,24 +1,31 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { logOut } from "@/lib/session";
-import Profile from "@/components/Profile";
+import { fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import Profile, { ModeratorProvider } from "@/components/Profile";
 
-vi.mock("@/lib/session", () => ({ logOut: vi.fn() }));
+const render = (el: React.ReactElement) => rtlRender(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho" }}>{el}</ModeratorProvider>);
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 const toggle = () => screen.getByRole("button", { name: "Daniel Ho, account menu" });
 
 describe("Profile", () => {
-  it("shows the demo moderator", () => {
+  it("shows the logged-in moderator", () => {
     render(<Profile />);
     expect(toggle().textContent).toContain("DH");
     expect(toggle().textContent).toContain("Moderator · DanielHo");
   });
 
-  it("opens a menu that logs out", () => {
+  it("opens a menu that logs out and returns to the front page", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    const assign = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("location", { assign });
     render(<Profile />);
     fireEvent.click(toggle());
     expect(toggle().getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(screen.getByRole("menuitem", { name: "Log out" }));
-    expect(logOut).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith("/api/session", { method: "DELETE" });
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/"));
   });
 
   it("closes on Escape, a click outside or the toggle", () => {

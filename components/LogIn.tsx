@@ -1,12 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { logIn } from "@/lib/session";
 import { Icon } from "./Icon";
 
-// Demo sign-in form: any email and password pass (see lib/session.ts), the browser's own validation checks the email format.
+// Sign-in form for moderators; app/api/session checks the email and password against the `moderators` collection in Firestore.
+// There is no sign-up. The browser's own validation checks the email format.
 export default function LogIn() {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function logIn(form: HTMLFormElement) {
+    const data = new FormData(form);
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
+      });
+      if (res.ok) return window.location.assign("/dashboard"); // a full load, so the server renders the app instead of the front page
+      setError((await res.json()).error ?? "Could not log in. Please try again.");
+    } catch {
+      setError("Could not log in. Please try again.");
+    }
+    setBusy(false);
+  }
 
   return (
     <div className="site login">
@@ -41,8 +60,7 @@ export default function LogIn() {
           style={{ "--d": "0.1s" } as React.CSSProperties}
           onSubmit={(e) => {
             e.preventDefault();
-            setBusy(true);
-            logIn();
+            logIn(e.currentTarget);
           }}
         >
           <h1>Log in</h1>
@@ -58,10 +76,12 @@ export default function LogIn() {
             {busy ? "Logging in…" : "Log in"}
           </button>
 
-          <div className="login-note" role="note">
-            <Icon d="alert" size={16} />
-            <span>Demo access: any email and password signs you in as Daniel Ho, Moderator.</span>
-          </div>
+          {error && (
+            <div className="login-note" role="alert">
+              <Icon d="alert" size={16} />
+              <span>{error}</span>
+            </div>
+          )}
         </form>
       </main>
     </div>

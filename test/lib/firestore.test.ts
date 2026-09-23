@@ -329,15 +329,39 @@ describe("listAuditLog", () => {
   });
 });
 
+describe("findModerator", () => {
+  it("looks a moderator up by email and returns the id, name and password hash", async () => {
+    let query: any;
+    mockFetch(at(":runQuery", (init: RequestInit) => {
+      query = JSON.parse(String(init.body)).structuredQuery;
+      return [{ document: fsDoc(`${BASE.slice(35)}/moderators/DanielHo`, { display_name: "Daniel Ho", email: "daniel@example.com", password_hash: "s:h" }) }];
+    }));
+    const { findModerator } = await load();
+    expect(await findModerator("daniel@example.com")).toEqual({ id: "DanielHo", name: "Daniel Ho", passwordHash: "s:h" });
+    expect(query).toEqual({
+      from: [{ collectionId: "moderators" }],
+      where: { fieldFilter: { field: { fieldPath: "email" }, op: "EQUAL", value: { stringValue: "daniel@example.com" } } },
+      limit: 1,
+    });
+  });
+
+  it("falls back to the id for a name, and returns null for an unknown email", async () => {
+    mockFetch(at(":runQuery", [{ document: fsDoc(`${BASE.slice(35)}/moderators/Ann`, {}) }]));
+    const { findModerator } = await load();
+    expect(await findModerator("ann@example.com")).toEqual({ id: "Ann", name: "Ann", passwordHash: "" });
+    mockFetch(at(":runQuery", [{ readTime: "2026-03-05T00:00:00Z" }]));
+    expect(await findModerator("nobody@example.com")).toBeNull();
+  });
+});
+
 describe("saveModeratorAction", () => {
   const email = (data: Record<string, unknown>) => fsDoc(DOC, { email_id: "email_001", classification: "Document-Comparison Request", attachments: ["si.pdf", "bl.pdf"], status: "cleared", si: bl, bl, ...data }, "2026-03-20T00:00:00.123Z");
   const commitResult = (n: number) => ({ writeResults: Array.from({ length: n }, () => ({ transformResults: [{ timestampValue: "2026-03-21T08:00:00Z" }] })) });
 
-  function save(doc: unknown, { moderator = true, commit }: { moderator?: boolean; commit?: (writes: Record<string, any>[]) => Response } = {}) {
+  function save(doc: unknown, { commit }: { commit?: (writes: Record<string, any>[]) => Response } = {}) {
     const writes: Record<string, any>[] = [];
     const fetchMock = mockFetch(
       at("/emails/email_001", doc),
-      at("/moderators/DanielHo", moderator ? fsDoc("m", { display_name: "Daniel Ho" }) : { error: "missing" }, moderator ? 200 : 404),
       (url, init) => {
         if (!url.pathname.endsWith(":commit")) return;
         writes.push(...JSON.parse(String(init.body)).writes);
@@ -351,7 +375,7 @@ describe("saveModeratorAction", () => {
   it("marks an email as read", async () => {
     const { writes } = save(email({}));
     const { saveModeratorAction } = await load();
-    const s = await saveModeratorAction("email_001");
+    const s = await saveModeratorAction("DanielHo", "email_001");
     expect(s).toMatchObject({ isRead: true, markedReadBy: "DanielHo", markedReadAt: "2026-03-21T08:00:00Z" });
     expect(writes).toHaveLength(2);
     expect(writes[0]).toMatchObject({
@@ -368,24 +392,15 @@ describe("saveModeratorAction", () => {
   it("does nothing when the email is already read", async () => {
     const { fetchMock } = save(email({ read_status: { is_read: true } }));
     const { saveModeratorAction } = await load();
-    expect((await saveModeratorAction("email_001")).isRead).toBe(true);
+    expect((await saveModeratorAction("DanielHo", "email_001")).isRead).toBe(true);
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith(":commit"))).toBe(false);
-  });
-
-  it("creates the moderator record the first time", async () => {
-    const { writes } = save(email({}), { moderator: false });
-    const { saveModeratorAction } = await load();
-    await saveModeratorAction("email_001");
-    expect(writes).toHaveLength(3);
-    expect(writes[0]).toMatchObject({ update: { name: "projects/test-project/databases/(default)/documents/moderators/DanielHo" }, currentDocument: { exists: false } });
-    expect(fromFs(writes[0].update.fields)).toEqual({ display_name: "Daniel Ho", role: "moderator" });
   });
 
   it("saves matching BL fields as cleared and records what changed", async () => {
     const { writes } = save(email({ bl: { ...bl, shipper: "Old" } }));
     const { saveModeratorAction } = await load();
     const input = { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" };
-    const s = await saveModeratorAction("email_001", input);
+    const s = await saveModeratorAction("DanielHo", "email_001", input);
     expect(s).toMatchObject({ status: "clean", reviewedBy: "DanielHo", reviewedAt: "2026-03-21T08:00:00Z", extractedFields: input });
     expect(writes[0].updateMask.fieldPaths).toEqual(["review.reviewed_by", "review.edited_side", "review.fields", "status", "human_review_required", "human_review_reasons"]);
     expect(fromFs(writes[0].update.fields)).toMatchObject({ status: "cleared", human_review_required: false });
@@ -397,7 +412,7 @@ describe("saveModeratorAction", () => {
   it("flags fields that still differ from the other document", async () => {
     const { writes } = save(email({}));
     const { saveModeratorAction } = await load();
-    const s = await saveModeratorAction("email_001", { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "4", grossWeightKg: "100" });
+    const s = await saveModeratorAction("DanielHo", "email_001", { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "4", grossWeightKg: "100" });
     expect(s.status).toBe("discrepancy");
     expect(s.reviewReasons).toEqual(["Container Count differs between SI and BL after manual verification."]);
     expect(fromFs(writes[0].update.fields)).toMatchObject({ status: "flagged", human_review_required: true });
@@ -408,7 +423,7 @@ describe("saveModeratorAction", () => {
     const { writes } = save(email({ review: { fields: override } }));
     const { saveModeratorAction } = await load();
     const input = { shipper: "BL override", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" };
-    const s = await saveModeratorAction("email_001", input, "si");
+    const s = await saveModeratorAction("DanielHo", "email_001", input, "si");
     expect(writes[0].updateMask.fieldPaths).toContain("review.si_fields");
     expect(s.referenceFields?.shipper).toBe("BL override");
     expect(s.extractedFields?.shipper).toBe("BL override");
@@ -418,7 +433,7 @@ describe("saveModeratorAction", () => {
   it("keeps ingestion problems as needs_review", async () => {
     const { writes } = save(email({ classification_error: "timeout" }));
     const { saveModeratorAction } = await load();
-    const s = await saveModeratorAction("email_001", { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" });
+    const s = await saveModeratorAction("DanielHo", "email_001", { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" });
     expect(fromFs(writes[0].update.fields).status).toBe("needs_review");
     expect(s.reviewReasons).toContain("Email classification failed: timeout");
   });
@@ -426,36 +441,30 @@ describe("saveModeratorAction", () => {
   it("refuses edits unless both documents were extracted", async () => {
     save(email({ si: null }));
     const { saveModeratorAction } = await load();
-    await expect(saveModeratorAction("email_001", {} as never)).rejects.toMatchObject({ status: 409, message: "Shipping Instruction and Draft BL must both be extracted before editing" });
+    await expect(saveModeratorAction("DanielHo", "email_001", {} as never)).rejects.toMatchObject({ status: 409, message: "Shipping Instruction and Draft BL must both be extracted before editing" });
   });
 
   it("reports a missing email as 404", async () => {
     mockFetch(at("/emails/nope", { error: "x" }, 404));
     const { saveModeratorAction } = await load();
-    await expect(saveModeratorAction("nope")).rejects.toMatchObject({ status: 404, message: "Email not found" });
+    await expect(saveModeratorAction("DanielHo", "nope")).rejects.toMatchObject({ status: 404, message: "Email not found" });
   });
 
   it("passes on other read errors", async () => {
     mockFetch(at("/emails/email_001", "boom", 500));
     const { saveModeratorAction } = await load();
-    await expect(saveModeratorAction("email_001")).rejects.toMatchObject({ status: 500 });
-  });
-
-  it("passes on unexpected moderator lookup errors", async () => {
-    mockFetch(at("/emails/email_001", email({})), at("/moderators/DanielHo", "boom", 500));
-    const { saveModeratorAction } = await load();
-    await expect(saveModeratorAction("email_001")).rejects.toMatchObject({ status: 500 });
+    await expect(saveModeratorAction("DanielHo", "email_001")).rejects.toMatchObject({ status: 500 });
   });
 
   it("turns a concurrent change into a 409 retry message", async () => {
     save(email({}), { commit: () => new Response("FAILED_PRECONDITION: stale", { status: 400 }) });
     const { saveModeratorAction } = await load();
-    await expect(saveModeratorAction("email_001")).rejects.toMatchObject({ status: 409, message: "The record changed while saving. Refresh and try again." });
+    await expect(saveModeratorAction("DanielHo", "email_001")).rejects.toMatchObject({ status: 409, message: "The record changed while saving. Refresh and try again." });
   });
 
   it("passes on other commit errors", async () => {
     save(email({}), { commit: () => new Response("nope", { status: 500 }) });
     const { saveModeratorAction } = await load();
-    await expect(saveModeratorAction("email_001")).rejects.toMatchObject({ status: 500, message: "Firestore 500: nope" });
+    await expect(saveModeratorAction("DanielHo", "email_001")).rejects.toMatchObject({ status: 500, message: "Firestore 500: nope" });
   });
 });

@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AuditPage from "@/app/audit/page";
 import SystemLogPage from "@/app/audit/system/page";
@@ -12,9 +11,10 @@ import RootLayout, { metadata, viewport } from "@/app/layout";
 import HomePage from "@/app/page";
 import LoginPage from "@/app/login/page";
 import SettingsPage from "@/app/settings/page";
+import { currentModerator } from "@/lib/session";
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
-vi.mock("next/headers", () => ({ cookies: vi.fn() }));
+vi.mock("@/lib/session", () => ({ currentModerator: vi.fn() }));
 vi.mock("next/font/google", () => ({ Figtree: () => ({ variable: "font-figtree" }) }));
 vi.mock("@/components/AuditLog", () => ({ default: ({ source }: { source: string }) => <main>audit:{source}</main> }));
 vi.mock("@/components/Dashboard", () => ({ default: () => <main>dashboard</main> }));
@@ -26,7 +26,7 @@ vi.mock("@/components/Shell", () => ({ default: ({ children }: { children: React
 vi.mock("@/lib/useShipments", () => ({ ShipmentsProvider: ({ children }: { children: ReactNode }) => <div className="provider">{children}</div> }));
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
-const loggedIn = (yes: boolean) => vi.mocked(cookies).mockResolvedValue({ has: (name: string) => yes && name === "shiptuationship-session" } as never);
+const loggedIn = (yes: boolean) => vi.mocked(currentModerator).mockResolvedValue(yes ? { id: "DanielHo", name: "Daniel Ho" } : null);
 
 beforeEach(() => {
   vi.mocked(redirect).mockClear();
