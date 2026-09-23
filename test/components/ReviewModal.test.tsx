@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { printEmail } from "@/lib/printEmail";
@@ -59,6 +59,20 @@ describe("ReviewModal header", () => {
     expect((within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
     rerender(<ReviewModal shipment={shipment({ isRead: true })} saving={false} {...handlers} />);
     expect((button("Read") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows an auditor the documents and the email but no way to change anything", () => {
+    render(<ReviewModal shipment={mismatch} saving={false} readOnly {...handlers} />);
+    expect(document.querySelector(".paper.si")).toBeTruthy();
+    expect(document.querySelector(".paper.bl .v.bad")).toBeTruthy(); // mismatches still show
+    expect(document.querySelector(".form-pane")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Mark as Read|Show Edit Form|Maximize Document Space|Save|Reset/ })).toBeNull();
+    toEmail();
+    expect(screen.queryByRole("button", { name: /Generate AI Reply/ })).toBeNull();
+    cleanup();
+    render(<ReviewModal shipment={shipment({ category: "invoice", referenceFields: null, extractedFields: null })} saving={false} readOnly {...handlers} />);
+    expect(document.querySelector(".plain-card")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Mark as Read|Generate AI Reply/ })).toBeNull();
   });
 
   it("prints, asking to allow pop-ups when blocked", () => {

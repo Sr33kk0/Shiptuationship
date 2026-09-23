@@ -15,7 +15,7 @@ const error = async (res: Response) => ((await res.json()) as { error: string })
 beforeEach(() => {
   save.mockReset();
   save.mockResolvedValue({ id: "email_001" } as never);
-  vi.mocked(currentModerator).mockResolvedValue({ id: "DanielHo", name: "Daniel Ho" });
+  vi.mocked(currentModerator).mockResolvedValue({ id: "DanielHo", name: "Daniel Ho", role: "moderator" });
 });
 
 describe("POST /api/emails/[id]/review", () => {
@@ -33,6 +33,14 @@ describe("POST /api/emails/[id]/review", () => {
   it("saves the SI side when asked", async () => {
     await post({ fields: fields(), side: "si" });
     expect(save).toHaveBeenCalledWith("DanielHo", "email_001", fields(), "si");
+  });
+
+  it("refuses an auditor, who is read-only", async () => {
+    vi.mocked(currentModerator).mockResolvedValue({ id: "AuditAnn", name: "Audit Ann", role: "auditor" });
+    const res = await post({ fields: fields() });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Auditors have read-only access" });
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("refuses without a valid session", async () => {

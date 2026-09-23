@@ -141,7 +141,7 @@ Shiptuationship has **two halves** that share one database:
 
 | Area | What you get |
 |------|--------------|
-| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** checks your email and password against the `moderators` collection in Firestore and opens `/dashboard`. There is no sign-up: moderators are added by hand (see [10.4](#104-getting-the-google-refresh-token-one-time)). Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page|
+| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** checks your username and password against the `moderators` collection in Firestore and opens `/dashboard`. There is no sign-up: moderators and read-only auditors are added by hand (see [10.4](#104-getting-the-google-refresh-token-one-time)). Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page|
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
 | **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box. On phones the *Human review required* reasons fold away behind a chevron. |
@@ -189,7 +189,7 @@ Shiptuationship has **two halves** that share one database:
 | Styling | Hand-written **CSS** (design tokens and per-theme variables). No CSS framework | Responsive layout, five colour schemes |
 | Charts | Custom **SVG** donut and bars, **Google Charts GeoChart** (loaded from `gstatic`, no API key) | Category chart, top-3 bars, heat maps |
 | Server side of the web app | Next.js **route handlers** (Node runtime) | Talk to Firestore. Credentials never reach the browser |
-| Log in | `/api/session` checks a scrypt password hash on the `moderators` document, then sets a signed HttpOnly cookie that Next.js **`proxy.ts`** verifies | Keeps logged-out visitors on the front page and off the data API, and attributes every action to the moderator who logged in |
+| Log in | `/api/session` checks a scrypt password hash on the `moderators` document, then sets a signed HttpOnly cookie that Next.js **`proxy.ts`** verifies | Keeps logged-out visitors on the front page and off the data API, keeps auditors read-only, and attributes every action to the moderator who logged in |
 | Database | **Google Cloud Firestore** via its **REST API** | Single source of truth |
 | Auth to Firestore | **Google OAuth2 refresh token** (same model as the n8n credential) | No service account, no Firebase SDK |
 | Automation | **n8n** (5 exported workflows in [`n8n/`](n8n)) | Gmail intake, ingestion, orchestration, comparison, auto-reply |
@@ -227,7 +227,7 @@ Shiptuationship has **two halves** that share one database:
 | Path | Purpose |
 |------|---------|
 | `emails/{id}/activity/{eventId}` | Immutable audit record per moderator action: `moderator_id`, `action` (`review_saved` / `marked_read`), `edited_side`, `changes` (per-field before and after), `before`, `after`, `occurred_at` (server time). Feeds the **User Log** |
-| `moderators/{id}` | One per moderator, added by hand (no sign-up). The id is the handle actions are attributed to. `display_name`, `role`, `email` (lowercase, the log in name), `password_hash` (from `npm run hash-password`) |
+| `moderators/{id}` | One per moderator or auditor, added by hand (no sign-up). The id is the handle actions are attributed to. `display_name`, `role` (`moderator`, or `auditor` for read-only; a missing or unknown role is read-only), `username` (lowercase, the log in name), `password_hash` (from `npm run hash-password`) |
 | `ingestion_queue/{createdTime}_{driveFileId}` | One row per Drive file: `file_id`, `name`, `created_time`, `status` (`queued → processing → done / failed`), `queued_at`, `claimed_at`, `finished_at`, `last_error` |
 
 </details>
@@ -379,7 +379,7 @@ The web app is where "ask for help" happens.
   4. Add an **`activity`** document (who, what, before and after, server timestamp) **in the same atomic commit**, guarded by the document's `updateTime` so concurrent edits are rejected instead of overwritten.
 - **Around the review:** the ‹ › buttons and arrow keys move to the previous or next email in the current list, **Print** builds an A4 print preview of everything known about the email (details, review reasons, the field-by-field comparison, body, attachments, audit trail) in a new tab, and attachments open the `drive_link` that n8n stored (only the SI and BL files have one). Moving to another email discards unsaved edits, with a toast.
 - **Read state:** "Mark as read" is stored separately from the comparison status (`read_status`), is idempotent, and drives the Gmail-style bold and dot in the inbox and the dashboard's read/unread progress.
-- **Identity:** each moderator logs in with the `email` and password on their `moderators/{id}` document. `/api/session` checks the password against its scrypt `password_hash` and sets a signed, HttpOnly session cookie (`lib/session.ts`) that expires after 12 hours or when the browser closes. `proxy.ts` sends requests without a valid session for app pages back to `/` and answers `401` on `/api/*`. Reviews and marked-read events are attributed to the logged-in moderator's id. **Log out** (in the profile menu) clears the cookie. Existing records without attribution stay "unknown" and are never retro-assigned.
+- **Identity:** each moderator or auditor logs in with the `username` and password on their `moderators/{id}` document. `/api/session` checks the password against its scrypt `password_hash` and sets a signed, HttpOnly session cookie (`lib/session.ts`) that expires after 12 hours or when the browser closes. `proxy.ts` sends requests without a valid session for app pages back to `/` and answers `401` on `/api/*`. **Roles:** only `role: "moderator"` can change anything. An auditor (any other or missing `role`) sees every page, log and export, but `proxy.ts` answers `403` to any request of theirs that is not `GET`/`HEAD` (saving a review, marking read, AI Reply), the write routes check again, and the review screen hides those actions. Reviews and marked-read events are attributed to the logged-in moderator's id. **Log out** (in the profile menu) clears the cookie. Existing records without attribution stay "unknown" and are never retro-assigned.
 
 ### 5.5 Audit logs
 
@@ -503,7 +503,7 @@ Being honest about what this version does **not** do yet:
 
 ### Phase 2: Medium-Term (Product Maturity)
  
-- **Access Control** — Build on moderator log in with Role-Based Access Control (RBAC) using the `role` field, attempt limits and session revocation.
+- **Access Control** — Extend the moderator / auditor roles with finer-grained permissions, attempt limits and session revocation.
 - **Real-Time Data Sync** — Transition from 30-second client-side polling to live Firestore listeners for instant UI updates.
 - **Workflow Automation** — Add automated reviewer assignment routing and SLA tracking.
 
@@ -584,13 +584,13 @@ Type-check only: `npx tsc --noEmit`
 4. The Google account you consent with needs the **Cloud Datastore User** IAM role on the Firestore project.
 5. Paste the three values into `.env.local`.
 
-**Add a moderator (there is no sign-up):**
+**Add a moderator or auditor (there is no sign-up):**
 
 1. Hash the password: `npm run hash-password -- "your-password"` prints `salt:hash`.
 2. In the Firebase console open **Firestore → `moderators`** and add (or edit) a document. Its id is the handle actions are attributed to, e.g. `DanielHo`.
-3. Give it string fields `display_name` (e.g. `Daniel Ho`), `role` (`moderator`), `email` (**lowercase**) and `password_hash` (the printed value). Never store the plain password.
+3. Give it string fields `display_name` (e.g. `Daniel Ho`), `role` (`moderator`, or `auditor` for read-only access), `username` (**lowercase**, e.g. `danielho`) and `password_hash` (the printed value). Never store the plain password.
 
-**Check it works:** log in on `http://localhost:3000` with that email and password, then open `http://localhost:3000/api/emails` in the same browser. You should get a JSON array (empty until n8n has ingested something).
+**Check it works:** log in on `http://localhost:3000` with that username and password, then open `http://localhost:3000/api/emails` in the same browser. You should get a JSON array (empty until n8n has ingested something).
 
 ### 10.5 Set up the ingestion pipeline (n8n)
 

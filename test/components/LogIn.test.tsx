@@ -16,24 +16,24 @@ afterEach(() => {
 
 function submit() {
   render(<LogIn />);
-  fireEvent.change(screen.getByLabelText("Work email"), { target: { value: "a@b.co" } });
+  fireEvent.change(screen.getByLabelText("Username"), { target: { value: "danielho" } });
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "x" } });
   fireEvent.click(screen.getByRole("button", { name: "Log in" }));
 }
 
 describe("LogIn", () => {
-  it("sends the email and password, holds the button, and opens the dashboard", async () => {
+  it("sends the username and password, holds the button, and opens the dashboard", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     submit();
     expect((screen.getByRole("button", { name: "Logging in…" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith("/api/session", expect.objectContaining({ method: "POST", body: JSON.stringify({ email: "a@b.co", password: "x" }) }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/session", expect.objectContaining({ method: "POST", body: JSON.stringify({ username: "danielho", password: "x" }) }));
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/dashboard"));
   });
 
   it("shows why a log in failed and lets you try again", async () => {
-    fetchMock.mockResolvedValue(Response.json({ error: "Wrong email or password" }, { status: 401 }));
+    fetchMock.mockResolvedValue(Response.json({ error: "Wrong username or password" }, { status: 401 }));
     submit();
-    expect((await screen.findByRole("alert")).textContent).toBe("Wrong email or password");
+    expect((await screen.findByRole("alert")).textContent).toBe("Wrong username or password");
     expect((screen.getByRole("button", { name: "Log in" }) as HTMLButtonElement).disabled).toBe(false);
     expect(assign).not.toHaveBeenCalled();
   });

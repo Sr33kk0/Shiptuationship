@@ -4,8 +4,9 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { Moderator } from "@/lib/session";
 import { Icon } from "./Icon";
 
-// The logged-in moderator, read from the session cookie by app/layout.tsx.
-const Me = createContext<Moderator>({ id: "", name: "" });
+// The logged-in moderator or auditor, read from the session cookie by app/layout.tsx. Outside the provider: read-only.
+const Me = createContext<Moderator>({ id: "", name: "", role: "auditor" });
+export const useMe = () => useContext(Me);
 export function ModeratorProvider({ value, children }: { value: Moderator; children: React.ReactNode }) {
   return <Me value={value}>{children}</Me>;
 }
@@ -18,7 +19,7 @@ function logOut() {
 // Clicking it opens a menu with Log out.
 export default function Profile() {
   const me = useContext(Me);
-  const user = { name: me.name, initials: me.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase(), role: "Moderator", handle: me.id };
+  const user = { name: me.name, initials: me.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase(), role: me.role === "moderator" ? "Moderator" : "Auditor", handle: me.id };
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 

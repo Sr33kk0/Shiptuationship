@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkPassword, createSession, readSession } from "@/lib/session";
 
-const me = { id: "DanielHo", name: "Daniel Ho" };
+const me = { id: "DanielHo", name: "Daniel Ho", role: "moderator" as const };
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -14,9 +14,13 @@ describe("session cookie", () => {
     expect(readSession(createSession(me))).toEqual(me);
   });
 
+  it("reads a cookie without a known role as a read-only auditor", () => {
+    for (const role of [undefined, "admin", "auditor"]) expect(readSession(createSession({ ...me, role } as never))?.role).toBe("auditor");
+  });
+
   it("rejects a missing, edited or forged cookie", () => {
     const [payload, sig] = createSession(me).split(".");
-    const edited = Buffer.from(JSON.stringify({ id: "Someone", name: "x", exp: Date.now() + 1e9 })).toString("base64url");
+    const edited = Buffer.from(JSON.stringify({ id: "Someone", name: "x", role: "moderator", exp: Date.now() + 1e9 })).toString("base64url");
     for (const value of [undefined, "", "1", payload, `${payload}.`, `${edited}.${sig}`, `${payload}.${sig.slice(1)}`, `${payload}.é${sig}`]) {
       expect(readSession(value)).toBeNull();
     }
