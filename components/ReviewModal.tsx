@@ -129,7 +129,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
   const [side, setSide] = useState<Side>("bl"); // which document the form edits
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
-  const [pane, setPane] = useState<Pane>("email");
+  const [pane, setPane] = useState<Pane>("preview");
   const [reply, setReply] = useState<Reply | null>(null);
   const [generating, setGenerating] = useState(false);
   const replyRequest = useRef<AbortController>(null);
@@ -270,8 +270,8 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                 value={pane}
                 onChange={setPane}
                 options={[
-                  ["email", "Read Email"],
                   ["preview", "Side-by-Side Review"],
+                  ["email", "Read Email"],
                 ]}
               />
             )}
