@@ -1,9 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { logIn } from "@/lib/session";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import Landing from "@/components/Landing";
-
-vi.mock("@/lib/session", () => ({ logIn: vi.fn() }));
 
 describe("Landing", () => {
   it("introduces the product", () => {
@@ -34,11 +31,10 @@ describe("Landing", () => {
     expect(container.querySelectorAll(".site-steps li")).toHaveLength(5);
   });
 
-  it("logs in from every call to action", () => {
+  it("sends every call to action to the log in page", () => {
     render(<Landing />);
-    const buttons = screen.getAllByRole("button", { name: /Log in/ });
-    expect(buttons).toHaveLength(3);
-    buttons.forEach((b) => fireEvent.click(b));
-    expect(logIn).toHaveBeenCalledTimes(3);
+    const links = screen.getAllByRole("link", { name: /Log in/ });
+    expect(links).toHaveLength(3);
+    for (const l of links) expect(l.getAttribute("href")).toBe("/login");
   });
 });
