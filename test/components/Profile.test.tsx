@@ -2,7 +2,7 @@ import { fireEvent, render as rtlRender, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Profile, { ModeratorProvider } from "@/components/Profile";
 
-const render = (el: React.ReactElement) => rtlRender(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho" }}>{el}</ModeratorProvider>);
+const render = (el: React.ReactElement) => rtlRender(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho", role: "moderator" }}>{el}</ModeratorProvider>);
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -13,6 +13,11 @@ describe("Profile", () => {
     render(<Profile />);
     expect(toggle().textContent).toContain("DH");
     expect(toggle().textContent).toContain("Moderator · DanielHo");
+  });
+
+  it("shows an auditor as one", () => {
+    rtlRender(<ModeratorProvider value={{ id: "AuditAnn", name: "Audit Ann", role: "auditor" }}><Profile /></ModeratorProvider>);
+    expect(screen.getByRole("button", { name: "Audit Ann, account menu" }).textContent).toContain("Auditor · AuditAnn");
   });
 
   it("opens a menu that logs out and returns to the front page", async () => {

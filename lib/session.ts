@@ -1,5 +1,5 @@
 // Server-only: the signed session cookie and moderator passwords. Never import this from a client component.
-// There is no sign-up: a moderator is a `moderators/{id}` document in Firestore with an `email` and a `password_hash`
+// There is no sign-up: a moderator is a `moderators/{id}` document in Firestore with a `username` and a `password_hash`
 // (made with `npm run hash-password`), and logging in (app/api/session) checks the password against that hash.
 import { createHmac, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
@@ -7,7 +7,9 @@ import { cookies } from "next/headers";
 export const SESSION_COOKIE = "shiptuationship-session";
 const TTL = 12 * 60 * 60 * 1000; // ponytail: a copied cookie stops working after 12 h; no server-side revocation, keep a session list in Firestore if one is needed
 
-export type Moderator = { id: string; name: string };
+// "auditor" is read-only: proxy.ts refuses every request of theirs that is not GET or HEAD, and the UI hides the actions.
+export type Role = "moderator" | "auditor";
+export type Moderator = { id: string; name: string; role: Role };
 
 function sign(payload: string) {
   const secret = process.env.SESSION_SECRET;
@@ -27,8 +29,8 @@ export function createSession(moderator: Moderator): string {
 export function readSession(value: string | undefined): Moderator | null {
   const [payload, sig] = (value ?? "").split(".");
   if (!payload || !sig || !same(Buffer.from(sig), Buffer.from(sign(payload)))) return null;
-  const { id, name, exp } = JSON.parse(Buffer.from(payload, "base64url").toString());
-  return exp > Date.now() ? { id, name } : null;
+  const { id, name, role, exp } = JSON.parse(Buffer.from(payload, "base64url").toString());
+  return exp > Date.now() ? { id, name, role: role === "moderator" ? "moderator" : "auditor" } : null; // anything but "moderator" is read-only
 }
 
 export const currentModerator = async () => readSession((await cookies()).get(SESSION_COOKIE)?.value);

@@ -330,27 +330,27 @@ describe("listAuditLog", () => {
 });
 
 describe("findModerator", () => {
-  it("looks a moderator up by email and returns the id, name and password hash", async () => {
+  it("looks a moderator up by username and returns the id, name, role and password hash", async () => {
     let query: any;
     mockFetch(at(":runQuery", (init: RequestInit) => {
       query = JSON.parse(String(init.body)).structuredQuery;
-      return [{ document: fsDoc(`${BASE.slice(35)}/moderators/DanielHo`, { display_name: "Daniel Ho", email: "daniel@example.com", password_hash: "s:h" }) }];
+      return [{ document: fsDoc(`${BASE.slice(35)}/moderators/DanielHo`, { display_name: "Daniel Ho", role: "moderator", username: "danielho", password_hash: "s:h" }) }];
     }));
     const { findModerator } = await load();
-    expect(await findModerator("daniel@example.com")).toEqual({ id: "DanielHo", name: "Daniel Ho", passwordHash: "s:h" });
+    expect(await findModerator("danielho")).toEqual({ id: "DanielHo", name: "Daniel Ho", role: "moderator", passwordHash: "s:h" });
     expect(query).toEqual({
       from: [{ collectionId: "moderators" }],
-      where: { fieldFilter: { field: { fieldPath: "email" }, op: "EQUAL", value: { stringValue: "daniel@example.com" } } },
+      where: { fieldFilter: { field: { fieldPath: "username" }, op: "EQUAL", value: { stringValue: "danielho" } } },
       limit: 1,
     });
   });
 
-  it("falls back to the id for a name, and returns null for an unknown email", async () => {
+  it("falls back to the id for a name and to read-only for a missing role, and returns null for an unknown username", async () => {
     mockFetch(at(":runQuery", [{ document: fsDoc(`${BASE.slice(35)}/moderators/Ann`, {}) }]));
     const { findModerator } = await load();
-    expect(await findModerator("ann@example.com")).toEqual({ id: "Ann", name: "Ann", passwordHash: "" });
+    expect(await findModerator("ann")).toEqual({ id: "Ann", name: "Ann", role: "auditor", passwordHash: "" });
     mockFetch(at(":runQuery", [{ readTime: "2026-03-05T00:00:00Z" }]));
-    expect(await findModerator("nobody@example.com")).toBeNull();
+    expect(await findModerator("nobody")).toBeNull();
   });
 });
 

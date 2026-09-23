@@ -10,7 +10,7 @@ import DateRangePicker from "./DateRangePicker";
 import ExportEmails from "./ExportEmails";
 import { Icon } from "./Icon";
 import Pagination from "./Pagination";
-import Profile from "./Profile";
+import Profile, { useMe } from "./Profile";
 import ReviewModal from "./ReviewModal";
 import SortSheet from "./SortSheet";
 import { useToast } from "./Shell";
@@ -53,6 +53,7 @@ const compare = (a: Shipment, b: Shipment, key: SortKey) => {
 export default function Emails() {
   const { shipments, setShipments, loadState, busy } = useShipments();
   const showToast = useToast();
+  const me = useMe();
   const [saving, setSaving] = useState(false);
   // Category and status live in the URL; legacy dashboard status links target Comparisons.
   const params = useSearchParams();
@@ -310,6 +311,7 @@ export default function Emails() {
           onSave={(side, fields) => save(selected, side, fields)}
           onMarkRead={() => save(selected)}
           onToast={showToast}
+          readOnly={me.role !== "moderator"}
           onPrev={at > 0 ? go(at - 1) : undefined}
           onNext={at >= 0 && at < rows.length - 1 ? go(at + 1) : undefined}
         />

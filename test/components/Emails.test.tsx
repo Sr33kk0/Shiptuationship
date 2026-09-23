@@ -5,6 +5,7 @@ import type { Shipment } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
 import { shipment } from "@/test/fixtures";
 import Emails from "@/components/Emails";
+import { ModeratorProvider } from "@/components/Profile";
 
 let query = "";
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(query) }));
@@ -17,9 +18,9 @@ const busy = { current: false };
 const setShipments = vi.fn((next: SetStateAction<Shipment[]>) => {
   rows = typeof next === "function" ? next(rows) : next;
 });
-const mount = (loadState: "loading" | "ready" | "error" = "ready") => {
+const mount = (loadState: "loading" | "ready" | "error" = "ready", role: "moderator" | "auditor" = "moderator") => {
   vi.mocked(useShipments).mockImplementation(() => ({ shipments: rows, setShipments, loadState, busy }));
-  return render(<Emails />);
+  return render(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho", role }}><Emails /></ModeratorProvider>);
 };
 const ids = () => [...document.querySelectorAll("tbody tr td.id")].map((td) => td.textContent);
 const tab = (name: RegExp) => within(document.querySelector(".filters") as HTMLElement).getByRole("link", { name });
@@ -190,6 +191,13 @@ describe("Emails review", () => {
     expect((screen.getByRole("button", { name: "Previous email" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Next email" }));
     expect(screen.getByRole("dialog", { name: "Manifest Inspection email_010" })).toBeTruthy();
+  });
+
+  it("opens emails read-only for an auditor", () => {
+    mount("ready", "auditor");
+    fireEvent.click(screen.getByText("Bravo invoice"));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Mark as Read|Generate AI Reply/ })).toBeNull();
   });
 
   it("marks an email as read and updates the row", async () => {

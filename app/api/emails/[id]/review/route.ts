@@ -11,6 +11,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return bad("Invalid email id");
   const moderator = await currentModerator(); // proxy.ts already checked; this is who the review is attributed to
   if (!moderator) return bad("Log in to continue", 401);
+  if (moderator.role !== "moderator") return bad("Auditors have read-only access", 403);
 
   let fields: Fields;
   let side: Side;

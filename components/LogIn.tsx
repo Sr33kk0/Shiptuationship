@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Icon } from "./Icon";
 
-// Sign-in form for moderators; app/api/session checks the email and password against the `moderators` collection in Firestore.
-// There is no sign-up. The browser's own validation checks the email format.
+// Sign-in form for moderators and auditors; app/api/session checks the username and password against the `moderators` collection in Firestore.
+// There is no sign-up.
 export default function LogIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -17,7 +17,7 @@ export default function LogIn() {
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
+        body: JSON.stringify({ username: data.get("username"), password: data.get("password") }),
       });
       if (res.ok) return window.location.assign("/dashboard"); // a full load, so the server renders the app instead of the front page
       setError((await res.json()).error ?? "Could not log in. Please try again.");
@@ -66,8 +66,8 @@ export default function LogIn() {
           <h1>Log in</h1>
           <p>Welcome back. Pick up the review queue where you left it.</p>
 
-          <label htmlFor="email">Work email</label>
-          <input id="email" name="email" type="email" autoComplete="username" placeholder="you@company.com" required autoFocus />
+          <label htmlFor="username">Username</label>
+          <input id="username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="danielho" required autoFocus />
 
           <label htmlFor="password">Password</label>
           <input id="password" name="password" type="password" autoComplete="current-password" placeholder="••••••••" required />

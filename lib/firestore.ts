@@ -1,6 +1,7 @@
 // Server-only: Firestore REST access with a Google OAuth2 refresh token (same model as the n8n credential).
 // Never import this from a client component.
 import type { AuditEvent } from "./audit";
+import type { Role } from "./session";
 import { FIELDS, FIRESTORE_KEYS, mismatches, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
@@ -295,17 +296,18 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
   return events.sort((a, b) => b.at.localeCompare(a.at));
 }
 
-// The moderator with this email, for logging in; null when there is none. Emails are stored lowercase.
-export async function findModerator(email: string): Promise<{ id: string; name: string; passwordHash: string } | null> {
+// The moderator (or auditor) with this username, for logging in; null when there is none. Usernames are stored lowercase.
+// Only `role: "moderator"` may make changes; a missing or any other role logs in read-only, as an auditor.
+export async function findModerator(username: string): Promise<{ id: string; name: string; role: Role; passwordHash: string } | null> {
   const [row] = await fs(":runQuery", { method: "POST", body: JSON.stringify({ structuredQuery: {
     from: [{ collectionId: "moderators" }],
-    where: { fieldFilter: { field: { fieldPath: "email" }, op: "EQUAL", value: { stringValue: email } } },
+    where: { fieldFilter: { field: { fieldPath: "username" }, op: "EQUAL", value: { stringValue: username } } },
     limit: 1,
   } }) }) as { document?: FsDocument }[];
   if (!row?.document) return null;
   const m = decodeMap(row.document.fields ?? {});
   const id = row.document.name.split("/").pop()!;
-  return { id, name: str(m.display_name) || id, passwordHash: str(m.password_hash) };
+  return { id, name: str(m.display_name) || id, role: m.role === "moderator" ? "moderator" : "auditor", passwordHash: str(m.password_hash) };
 }
 
 const requestTime = (fieldPath: string) => ({ fieldPath, setToServerValue: "REQUEST_TIME" });

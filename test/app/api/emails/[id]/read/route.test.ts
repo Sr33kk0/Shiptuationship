@@ -12,7 +12,7 @@ const fail = (message: string, status?: number) => Object.assign(new Error(messa
 
 beforeEach(() => {
   save.mockReset();
-  vi.mocked(currentModerator).mockResolvedValue({ id: "DanielHo", name: "Daniel Ho" });
+  vi.mocked(currentModerator).mockResolvedValue({ id: "DanielHo", name: "Daniel Ho", role: "moderator" });
 });
 
 describe("POST /api/emails/[id]/read", () => {
@@ -31,6 +31,14 @@ describe("POST /api/emails/[id]/read", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "email_001", isRead: true });
     expect(save).toHaveBeenCalledWith("DanielHo", "email_001");
+  });
+
+  it("refuses an auditor, who is read-only", async () => {
+    vi.mocked(currentModerator).mockResolvedValue({ id: "AuditAnn", name: "Audit Ann", role: "auditor" });
+    const res = await post("email_001");
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Auditors have read-only access" });
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("refuses without a valid session", async () => {

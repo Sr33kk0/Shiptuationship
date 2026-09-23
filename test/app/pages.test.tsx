@@ -26,7 +26,7 @@ vi.mock("@/components/Shell", () => ({ default: ({ children }: { children: React
 vi.mock("@/lib/useShipments", () => ({ ShipmentsProvider: ({ children }: { children: ReactNode }) => <div className="provider">{children}</div> }));
 
 const html = (el: ReactElement) => renderToStaticMarkup(el);
-const loggedIn = (yes: boolean) => vi.mocked(currentModerator).mockResolvedValue(yes ? { id: "DanielHo", name: "Daniel Ho" } : null);
+const loggedIn = (yes: boolean) => vi.mocked(currentModerator).mockResolvedValue(yes ? { id: "DanielHo", name: "Daniel Ho", role: "moderator" as const } : null);
 
 beforeEach(() => {
   vi.mocked(redirect).mockClear();

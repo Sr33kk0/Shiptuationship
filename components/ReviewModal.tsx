@@ -119,13 +119,14 @@ interface Props {
   onSave: (side: Side, fields: Fields) => void;
   onMarkRead: () => void;
   onToast: (msg: string) => void;
+  readOnly?: boolean; // auditors: no edit form, Mark as Read or AI Reply (proxy.ts refuses them anyway)
   onPrev?: () => void; // undefined = no earlier email in the list
   onNext?: () => void;
 }
 
 const actionTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "medium" }) + " MYT";
 
-export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast, onPrev, onNext }: Props) {
+export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast, readOnly, onPrev, onNext }: Props) {
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
   const [side, setSide] = useState<Side>("bl"); // which document the form edits
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
@@ -264,7 +265,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
               <Icon d="print" size={14} sw={2} />
               Print
             </button>
-            {isCmp && <button className="btn dark" disabled={saving || s.isRead} onClick={onMarkRead}>{s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}</button>}
+            {isCmp && !readOnly && <button className="btn dark" disabled={saving || s.isRead} onClick={onMarkRead}>{s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}</button>}
             {isCmp && (
               <Seg
                 value={pane}
@@ -300,7 +301,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
           <div className="cmp">
             <div className="cmp-body">
               {/* the form only belongs with the documents; reading the email gets the whole window (edits are kept while it is hidden) */}
-              {formOpen && pane === "preview" && (
+              {!readOnly && formOpen && pane === "preview" && (
                 <div className="form-pane">
                   <div className="form-head">
                     <b>Manifest Fields</b>
@@ -363,9 +364,11 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                 {pane === "preview" ? (
                   <>
                     <div className="doc-bar">
-                      <button className="toggle" onClick={() => setFormOpen(!formOpen)}>
-                        {formOpen ? "Maximize Document Space" : "Show Edit Form"}
-                      </button>
+                      {!readOnly && (
+                        <button className="toggle" onClick={() => setFormOpen(!formOpen)}>
+                          {formOpen ? "Maximize Document Space" : "Show Edit Form"}
+                        </button>
+                      )}
                       <Seg
                         sm
                         value={docView}
@@ -398,9 +401,11 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                       <Attachments names={s.attachmentNames} links={s.attachmentLinks} heading={`Attachments (${s.attachmentNames.length})`} />
                     </div>
                     <div className="reply-actions">
-                      <button className="btn dark" disabled={generating} onClick={generate}>
-                        {reply ? "Regenerate AI Reply" : "Generate AI Reply"}
-                      </button>
+                      {!readOnly && (
+                        <button className="btn dark" disabled={generating} onClick={generate}>
+                          {reply ? "Regenerate AI Reply" : "Generate AI Reply"}
+                        </button>
+                      )}
                       <button className="btn ghost" onClick={() => setPane("preview")}>
                         Side-by-Side Review
                       </button>
@@ -434,12 +439,16 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
               <button className="btn ghost lg" onClick={close}>
                 Close
               </button>
-              <button className="btn dark lg" disabled={generating} onClick={generate}>
-                {reply ? "Regenerate AI Reply" : "Generate AI Reply"}
-              </button>
-              <button className="btn dark lg" disabled={saving || s.isRead} onClick={onMarkRead}>
-                {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
-              </button>
+              {!readOnly && (
+                <>
+                  <button className="btn dark lg" disabled={generating} onClick={generate}>
+                    {reply ? "Regenerate AI Reply" : "Generate AI Reply"}
+                  </button>
+                  <button className="btn dark lg" disabled={saving || s.isRead} onClick={onMarkRead}>
+                    {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
