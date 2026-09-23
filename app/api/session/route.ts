@@ -20,7 +20,8 @@ export async function POST(req: Request) {
   let moderator;
   try {
     moderator = await findModerator(email.trim().toLowerCase());
-  } catch {
+  } catch (e) {
+    console.error("Log in: moderator lookup failed", e); // the visitor gets a generic message; the reason goes to the server logs
     return fail("Could not log in. Please try again.", 502);
   }
   if (!moderator?.passwordHash || !checkPassword(password, moderator.passwordHash)) return fail("Wrong email or password", 401);
