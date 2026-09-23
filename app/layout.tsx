@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree } from "next/font/google";
-import { cookies } from "next/headers";
+import { ModeratorProvider } from "@/components/Profile";
 import Shell from "@/components/Shell";
-import { SESSION_COOKIE } from "@/lib/session";
+import { currentModerator } from "@/lib/session";
 import { ShipmentsProvider } from "@/lib/useShipments";
 import "./globals.css";
 
@@ -28,18 +28,20 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f5f5f7" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const loggedIn = (await cookies()).has(SESSION_COOKIE); // the app shell (and its data fetching) only exists once logged in; the front page renders bare
+  const moderator = await currentModerator(); // the app shell (and its data fetching) only exists once logged in; the front page renders bare
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* before first paint, so there is no flash: the app applies the colour scheme chosen in Settings; the front page (logged out) is always the default light one */}
-        {loggedIn && <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("shiptuationship-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}` }} />}
+        {moderator && <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("shiptuationship-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}` }} />}
       </head>
       <body className={figtree.variable}>
-        {loggedIn ? (
-          <ShipmentsProvider>
-            <Shell>{children}</Shell>
-          </ShipmentsProvider>
+        {moderator ? (
+          <ModeratorProvider value={moderator}>
+            <ShipmentsProvider>
+              <Shell>{children}</Shell>
+            </ShipmentsProvider>
+          </ModeratorProvider>
         ) : (
           children
         )}

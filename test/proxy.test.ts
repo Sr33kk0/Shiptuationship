@@ -1,26 +1,33 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
-import { SESSION_COOKIE } from "@/lib/session";
+import { SESSION_COOKIE, createSession } from "@/lib/session";
 import { config, proxy } from "@/proxy";
 
-const request = (path: string, loggedIn: boolean) =>
-  new NextRequest(`http://localhost${path}`, { headers: loggedIn ? { cookie: `${SESSION_COOKIE}=1` } : {} });
+const valid = createSession({ id: "DanielHo", name: "Daniel Ho" });
+const request = (path: string, cookie?: string, method = "GET") =>
+  new NextRequest(`http://localhost${path}`, { method, headers: cookie === undefined ? {} : { cookie: `${SESSION_COOKIE}=${cookie}` } });
 
 describe("proxy", () => {
   it("lets logged-in visitors through", () => {
-    expect(proxy(request("/dashboard", true)).headers.get("x-middleware-next")).toBe("1");
-    expect(proxy(request("/api/emails", true)).headers.get("x-middleware-next")).toBe("1");
+    expect(proxy(request("/dashboard", valid)).headers.get("x-middleware-next")).toBe("1");
+    expect(proxy(request("/api/emails", valid)).headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("answers the data API with 401 when logged out", async () => {
-    const res = proxy(request("/api/emails", false));
-    expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: "Log in to continue" });
+  it("lets anyone reach the log in route", () => {
+    expect(proxy(request("/api/session", undefined, "POST")).headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("answers the data API with 401 when logged out or the cookie is not a valid session", async () => {
+    for (const cookie of [undefined, "1", `${valid}x`]) {
+      const res = proxy(request("/api/emails", cookie));
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "Log in to continue" });
+    }
   });
 
   it("sends logged-out visitors of app pages to the front page", () => {
-    const res = proxy(request("/emails?view=spam", false));
+    const res = proxy(request("/emails?view=spam", "1"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost/");
   });

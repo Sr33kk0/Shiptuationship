@@ -1,4 +1,5 @@
 import { saveModeratorAction } from "@/lib/firestore";
+import { currentModerator } from "@/lib/session";
 import { FIELDS, type Fields, type Side } from "@/lib/shipments";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,8 @@ const bad = (error: string, status = 400) => Response.json({ error }, { status }
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) return bad("Invalid email id");
+  const moderator = await currentModerator(); // proxy.ts already checked; this is who the review is attributed to
+  if (!moderator) return bad("Log in to continue", 401);
 
   let fields: Fields;
   let side: Side;
@@ -24,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   try {
-    return Response.json(await saveModeratorAction(id, fields, side));
+    return Response.json(await saveModeratorAction(moderator.id, id, fields, side));
   } catch (e) {
     const status = (e as { status?: number }).status;
     return bad(status === 404 || status === 409 ? (e as Error).message : "Could not save review. Please try again.", status === 404 || status === 409 ? status : 502);

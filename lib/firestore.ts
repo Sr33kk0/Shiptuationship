@@ -295,15 +295,27 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
   return events.sort((a, b) => b.at.localeCompare(a.at));
 }
 
-// Preset demo identity: everyone using this app acts as DanielHo.
-const MODERATOR = "DanielHo";
+// The moderator with this email, for logging in; null when there is none. Emails are stored lowercase.
+export async function findModerator(email: string): Promise<{ id: string; name: string; passwordHash: string } | null> {
+  const [row] = await fs(":runQuery", { method: "POST", body: JSON.stringify({ structuredQuery: {
+    from: [{ collectionId: "moderators" }],
+    where: { fieldFilter: { field: { fieldPath: "email" }, op: "EQUAL", value: { stringValue: email } } },
+    limit: 1,
+  } }) }) as { document?: FsDocument }[];
+  if (!row?.document) return null;
+  const m = decodeMap(row.document.fields ?? {});
+  const id = row.document.name.split("/").pop()!;
+  return { id, name: str(m.display_name) || id, passwordHash: str(m.password_hash) };
+}
+
 const requestTime = (fieldPath: string) => ({ fieldPath, setToServerValue: "REQUEST_TIME" });
 const actionError = (message: string, status: number) => Object.assign(new Error(message), { status });
 
 // Edits never touch the `si` / `bl` maps the n8n workflow writes; they are stored as overrides under `review`.
 // `review.fields` is the BL override (the name predates SI editing, so existing reviews keep working);
 // `review.si_fields` is the SI override. Without `fields` the call marks the email as read instead.
-export async function saveModeratorAction(id: string, fields?: Fields, side: Side = "bl"): Promise<Shipment> {
+// `moderator` is the logged-in moderator's document id, which the action is attributed to.
+export async function saveModeratorAction(moderator: string, id: string, fields?: Fields, side: Side = "bl"): Promise<Shipment> {
   const path = `emails/${encodeURIComponent(id)}`;
   let snapshot: { name: string; fields?: Record<string, FsValue>; updateTime: string };
   try {
@@ -326,37 +338,25 @@ export async function saveModeratorAction(id: string, fields?: Fields, side: Sid
   const flagged = reviewReasons.length > 0;
   const reviewKey = side === "si" ? "si_fields" : "fields";
   const updates: Doc = fields ? {
-    review: { reviewed_by: MODERATOR, edited_side: side, [reviewKey]: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
+    review: { reviewed_by: moderator, edited_side: side, [reviewKey]: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
     status: blockers.length ? "needs_review" : flagged ? "flagged" : "cleared",
     human_review_required: flagged,
     human_review_reasons: reviewReasons,
-  } : { read_status: { is_read: true, marked_by: MODERATOR } };
+  } : { read_status: { is_read: true, marked_by: moderator } };
   // Nested paths for `review`, so saving one side keeps the other side's override.
   const mask = fields ? ["review.reviewed_by", "review.edited_side", `review.${reviewKey}`, "status", "human_review_required", "human_review_reasons"] : Object.keys(updates);
   const timeField = fields ? "review.reviewed_at" : "read_status.marked_at";
   const changes: Doc = fields ? Object.fromEntries(FIELDS
     .filter((f) => saved?.[f.key] !== fields[f.key])
     .map((f) => [FIRESTORE_KEYS[f.key], { before: saved?.[f.key] ?? null, after: fields[f.key] }])) : {};
-  const writes: unknown[] = [];
-  const moderatorName = `${BASE.slice("https://firestore.googleapis.com/v1/".length)}/moderators/${MODERATOR}`;
-  try {
-    await fsGet(`moderators/${MODERATOR}`);
-  } catch (e) {
-    if ((e as { status?: number }).status !== 404) throw e;
-    writes.push({
-      update: { name: moderatorName, fields: encodeMap({ display_name: "Daniel Ho", role: "moderator" }) },
-      currentDocument: { exists: false },
-      updateTransforms: [requestTime("created_at")],
-    });
-  }
-  writes.push({
+  const writes = [{
     update: { name: snapshot.name, fields: encodeMap(updates) },
     updateMask: { fieldPaths: mask },
     currentDocument: { updateTime: snapshot.updateTime },
     updateTransforms: [requestTime(timeField)],
   }, {
     update: { name: `${snapshot.name}/activity/${crypto.randomUUID()}`, fields: encodeMap({
-      moderator_id: MODERATOR,
+      moderator_id: moderator,
       action: fields ? "review_saved" : "marked_read",
       edited_side: fields ? side : null,
       changes,
@@ -365,11 +365,11 @@ export async function saveModeratorAction(id: string, fields?: Fields, side: Sid
     }) },
     currentDocument: { exists: false },
     updateTransforms: [requestTime("occurred_at")],
-  });
+  }];
   try {
     const result = await fs(":commit", { method: "POST", body: JSON.stringify({ writes }) });
     const map = updates[fields ? "review" : "read_status"] as Doc;
-    map[fields ? "reviewed_at" : "marked_at"] = result.writeResults[writes.length - 2].transformResults[0].timestampValue;
+    map[fields ? "reviewed_at" : "marked_at"] = result.writeResults[0].transformResults[0].timestampValue;
     // Mirror the nested mask: the untouched side's override under `review` survives the save.
     const review = fields ? { ...((before.review as Doc | undefined) ?? {}), ...(updates.review as Doc) } : before.review;
     return toShipment({ ...before, ...updates, review });

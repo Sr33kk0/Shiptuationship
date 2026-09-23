@@ -5,7 +5,8 @@
     "dev": "next dev",
     "build": "next build",
     "test": "vitest run",
-    "start": "next start"
+    "start": "next start",
+    "hash-password": "node -e \"const c = require('node:crypto'), salt = c.randomBytes(16).toString('hex'); console.log(salt + ':' + c.scryptSync(process.argv[1], salt, 64).toString('hex'))\""
   },
   "dependencies": {
     "next": "^16.3.5",

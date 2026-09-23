@@ -141,7 +141,7 @@ Shiptuationship has **two halves** that share one database:
 
 | Area | What you get |
 |------|--------------|
-| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** signs in as the preset moderator and opens `/dashboard`. Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. A demo sign-in, not real authentication|
+| **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** checks your email and password against the `moderators` collection in Firestore and opens `/dashboard`. There is no sign-up: moderators are added by hand (see [10.4](#104-getting-the-google-refresh-token-one-time)). Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page|
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
 | **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box. On phones the *Human review required* reasons fold away behind a chevron. |
@@ -189,7 +189,7 @@ Shiptuationship has **two halves** that share one database:
 | Styling | Hand-written **CSS** (design tokens and per-theme variables). No CSS framework | Responsive layout, five colour schemes |
 | Charts | Custom **SVG** donut and bars, **Google Charts GeoChart** (loaded from `gstatic`, no API key) | Category chart, top-3 bars, heat maps |
 | Server side of the web app | Next.js **route handlers** (Node runtime) | Talk to Firestore. Credentials never reach the browser |
-| Access gate (demo) | A session cookie plus Next.js **`proxy.ts`** | Keeps logged-out visitors on the front page and off the data API. Not real authentication |
+| Log in | `/api/session` checks a scrypt password hash on the `moderators` document, then sets a signed HttpOnly cookie that Next.js **`proxy.ts`** verifies | Keeps logged-out visitors on the front page and off the data API, and attributes every action to the moderator who logged in |
 | Database | **Google Cloud Firestore** via its **REST API** | Single source of truth |
 | Auth to Firestore | **Google OAuth2 refresh token** (same model as the n8n credential) | No service account, no Firebase SDK |
 | Automation | **n8n** (5 exported workflows in [`n8n/`](n8n)) | Gmail intake, ingestion, orchestration, comparison, auto-reply |
@@ -227,7 +227,7 @@ Shiptuationship has **two halves** that share one database:
 | Path | Purpose |
 |------|---------|
 | `emails/{id}/activity/{eventId}` | Immutable audit record per moderator action: `moderator_id`, `action` (`review_saved` / `marked_read`), `edited_side`, `changes` (per-field before and after), `before`, `after`, `occurred_at` (server time). Feeds the **User Log** |
-| `moderators/{id}` | Moderator profile (auto-created on first action) |
+| `moderators/{id}` | One per moderator, added by hand (no sign-up). The id is the handle actions are attributed to. `display_name`, `role`, `email` (lowercase, the log in name), `password_hash` (from `npm run hash-password`) |
 | `ingestion_queue/{createdTime}_{driveFileId}` | One row per Drive file: `file_id`, `name`, `created_time`, `status` (`queued → processing → done / failed`), `queued_at`, `claimed_at`, `finished_at`, `last_error` |
 
 </details>
@@ -242,8 +242,9 @@ Shiptuationship has **two halves** that share one database:
 | `/api/emails/{id}/review` | `POST` | Body `{ side: "si" \| "bl", fields }`: save a verified override for one side, re-run the comparison, log the activity |
 | `/api/emails/{id}/read` | `POST` | Mark an email as read (idempotent) |
 | `/api/audit?source=user\|system` | `GET` | User Log (moderator activity) or System Log (n8n activity) |
+| `/api/session` | `POST` / `DELETE` | Log in with body `{ email, password }` (`204` and a session cookie, or `401 {"error":"Wrong email or password"}`), log out |
 
-Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (conflict or precondition failed). Without the demo session cookie (see [5.4](#54-human-in-the-loop-the-web-app)) every `/api/*` route returns `401 {"error":"Log in to continue"}`.
+Errors return `502` (Firestore unreachable), `404` (unknown email), `409` (conflict or precondition failed). Without a valid session cookie (see [5.4](#54-human-in-the-loop-the-web-app)) every `/api/*` route except `/api/session` returns `401 {"error":"Log in to continue"}`.
 
 ---
 
@@ -378,7 +379,7 @@ The web app is where "ask for help" happens.
   4. Add an **`activity`** document (who, what, before and after, server timestamp) **in the same atomic commit**, guarded by the document's `updateTime` so concurrent edits are rejected instead of overwritten.
 - **Around the review:** the ‹ › buttons and arrow keys move to the previous or next email in the current list, **Print** builds an A4 print preview of everything known about the email (details, review reasons, the field-by-field comparison, body, attachments, audit trail) in a new tab, and attachments open the `drive_link` that n8n stored (only the SI and BL files have one). Moving to another email discards unsaved edits, with a toast.
 - **Read state:** "Mark as read" is stored separately from the comparison status (`read_status`), is idempotent, and drives the Gmail-style bold and dot in the inbox and the dashboard's read/unread progress.
-- **Identity:** the app runs as a **preset moderator (`DanielHo`)**. The front page's **Log in** button is a one-click demo sign-in: it sets a session cookie (`lib/session.ts`) and `proxy.ts` sends logged-out requests for app pages back to `/` and answers `401` on `/api/*`. **Log out** (in the profile menu) clears it. This is not real authentication, and everyone is attributed to that identity. Existing records without attribution stay "unknown" and are never retro-assigned.
+- **Identity:** each moderator logs in with the `email` and password on their `moderators/{id}` document. `/api/session` checks the password against its scrypt `password_hash` and sets a signed, HttpOnly session cookie (`lib/session.ts`) that expires after 12 hours or when the browser closes. `proxy.ts` sends requests without a valid session for app pages back to `/` and answers `401` on `/api/*`. Reviews and marked-read events are attributed to the logged-in moderator's id. **Log out** (in the profile menu) clears the cookie. Existing records without attribution stay "unknown" and are never retro-assigned.
 
 ### 5.5 Audit logs
 
@@ -414,7 +415,7 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 - **Untrusted input:** emails and attachments are treated as data in every prompt, and the classifier and extractor are told never to obey instructions found inside them.
 - **No silent guessing:** every uncertain path (bad classification, missing attachment, unreadable file, incomplete SI/BL) ends in a **visible status** and a human queue, never a fabricated value.
 - **Secrets:** OAuth credentials live only in `.env.local` (git-ignored) and n8n credentials. Nothing sensitive is in the repository.
-- **Demo access gate:** without the session cookie the app pages redirect to the front page and `/api/*` answers `401`. It is a convenience gate for a demo, not authentication: anyone can set the cookie.
+- **Log in:** passwords are stored only as scrypt hashes. The session cookie is HttpOnly, SameSite=Lax, HMAC-signed with `SESSION_SECRET` and expires after 12 hours, so it cannot be forged or edited. Without a valid one the app pages redirect to the front page and `/api/*` answers `401`. There is no attempt limit or server-side session revocation yet.
 - **Write safety:** moderator writes use Firestore preconditions and one atomic commit, so concurrent edits fail loudly instead of corrupting data.
 
 ---
@@ -502,7 +503,7 @@ Being honest about what this version does **not** do yet:
 
 ### Phase 2: Medium-Term (Product Maturity)
  
-- **Access Control** — Replace the demo authentication gate with production-ready Role-Based Access Control (RBAC).
+- **Access Control** — Build on moderator log in with Role-Based Access Control (RBAC) using the `role` field, attempt limits and session revocation.
 - **Real-Time Data Sync** — Transition from 30-second client-side polling to live Firestore listeners for instant UI updates.
 - **Workflow Automation** — Add automated reviewer assignment routing and SLA tracking.
 
@@ -551,7 +552,7 @@ cp .env.example .env.local        # Windows PowerShell: Copy-Item .env.example .
 npm run dev                        # http://localhost:3000
 ```
 
-Open `http://localhost:3000` and click **Log in** to enter the app (the app pages and the API need the demo session, see 5.4).
+Add yourself as a moderator (see 10.4), then open `http://localhost:3000` and click **Log in** to enter the app.
 
 Production build:
 
@@ -569,6 +570,7 @@ Type-check only: `npx tsc --noEmit`
 | `GOOGLE_CLIENT_SECRET` | yes | OAuth client secret |
 | `GOOGLE_REFRESH_TOKEN` | yes | Refresh token granted with scope `https://www.googleapis.com/auth/datastore` |
 | `FIRESTORE_PROJECT_ID` | yes | Firestore project ID |
+| `SESSION_SECRET` | yes | Signs the login cookie. Any random string of 32+ characters: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Changing it logs everyone out |
 | `N8N_AUTO_REPLY_WEBHOOK_URL` | yes, for auto replies | Production URL of the active n8n `auto-reply` webhook |
 | `NEXT_PUBLIC_SITE_URL` | no | Public address of the deployed site. Defaults to `http://localhost:3000`. Optional; **add it in `.env.local` if you're deploying somewhere other than `localhost:3000`** |
 
@@ -582,7 +584,13 @@ Type-check only: `npx tsc --noEmit`
 4. The Google account you consent with needs the **Cloud Datastore User** IAM role on the Firestore project.
 5. Paste the three values into `.env.local`.
 
-**Check it works:** click **Log in** on `http://localhost:3000`, then open `http://localhost:3000/api/emails` in the same browser. You should get a JSON array (empty until n8n has ingested something).
+**Add a moderator (there is no sign-up):**
+
+1. Hash the password: `npm run hash-password -- "your-password"` prints `salt:hash`.
+2. In the Firebase console open **Firestore → `moderators`** and add (or edit) a document. Its id is the handle actions are attributed to, e.g. `DanielHo`.
+3. Give it string fields `display_name` (e.g. `Daniel Ho`), `role` (`moderator`), `email` (**lowercase**) and `password_hash` (the printed value). Never store the plain password.
+
+**Check it works:** log in on `http://localhost:3000` with that email and password, then open `http://localhost:3000/api/emails` in the same browser. You should get a JSON array (empty until n8n has ingested something).
 
 ### 10.5 Set up the ingestion pipeline (n8n)
 
@@ -633,10 +641,10 @@ Shiptuationship
 ├─ lib/
 │  ├─ firestore.ts             Server-only Firestore REST client (OAuth, mapping, moderator actions)
 │  ├─ shipments.ts             Types, the 7 fields, the deterministic UI comparison, date helpers
-│  ├─ session.ts · printEmail.ts   Demo session cookie, and the A4 print preview
+│  ├─ session.ts · printEmail.ts   Signed session cookie and password check, and the A4 print preview
 │  ├─ audit.ts · theme.ts      Log types (and the "Ship AI" bot name) and colour scheme registry
 │  └─ ports.ts · top.ts · …    Port → country mapping, top-N, hooks
-├─ proxy.ts                    Session gate: app pages and /api/* need the demo session
+├─ proxy.ts                    Session gate: app pages and /api/* need a valid session
 ├─ n8n/                        gmail-ship-to-drive.json · ingestion.json · ingestion-trigger.json · ingestion-drain.json · auto-reply.json
 ├─ public/shiplogo.svg         Logo (vectorised)
 ├─ public/opengraph.png        Link preview image (1200×630)
@@ -649,6 +657,7 @@ Shiptuationship
 | `npm run dev` | Development server on `http://localhost:3000` |
 | `npm run build` | Production build |
 | `npm run start` | Serve the production build |
+| `npm run hash-password -- "<password>"` | Print a `password_hash` for a `moderators` document |
 | `npx tsc --noEmit` | Type-check the whole project |
 
 ---
