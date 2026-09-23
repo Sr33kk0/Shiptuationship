@@ -50,11 +50,15 @@ describe("POST /api/session", () => {
     expect(find).not.toHaveBeenCalled();
   });
 
-  it("hides Firestore errors behind a generic 502", async () => {
-    find.mockRejectedValue(new Error("Firestore 500: secret detail"));
+  it("hides Firestore errors behind a generic 502 and logs the reason", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("Firestore 500: secret detail");
+    find.mockRejectedValue(cause);
     const res = await post({ email: "a@b.co", password: "x" });
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: "Could not log in. Please try again." });
+    expect(log).toHaveBeenCalledWith("Log in: moderator lookup failed", cause);
+    log.mockRestore();
   });
 });
 
