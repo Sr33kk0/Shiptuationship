@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   }
 
   const body = payload as { email?: { id?: unknown; subject?: unknown; sender?: unknown; body?: unknown } };
-  if (!body.email || ![body.email.id, body.email.subject, body.email.sender, body.email.body].every((value) => typeof value === "string")) {
+  if (!body?.email ||![body.email.id, body.email.subject, body.email.sender, body.email.body].every((value) => typeof value === "string")) {
     return bad("Email id, subject, sender, and body are required");
   }
   if (JSON.stringify(payload).length > 100_000) return bad("Email data is too large", 413);

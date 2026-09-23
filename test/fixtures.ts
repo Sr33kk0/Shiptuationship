@@ -1,0 +1,41 @@
+import type { Fields, Shipment } from "@/lib/shipments";
+
+export const fields = (over: Partial<Fields> = {}): Fields => ({
+  shipper: "Meridian Textiles Sdn Bhd",
+  consignee: "Harbor & Vale Imports Ltd",
+  notifyParty: "Harbor & Vale Imports Ltd",
+  pol: "Port Klang, Malaysia (MYPKG)",
+  pod: "Rotterdam, Netherlands (NLRTM)",
+  containerCount: "3",
+  grossWeightKg: "22000",
+  ...over,
+});
+
+export const shipment = (over: Partial<Shipment> = {}): Shipment => ({
+  id: "email_001",
+  subject: "SI and draft BL for review",
+  sender: "ops@meridian.example",
+  senderName: "Meridian Ops",
+  category: "document-comparison",
+  date: "20 Mar 2026",
+  rawDate: "2026-03-20",
+  at: "2026-03-20T09:15:00.000Z",
+  status: "clean",
+  reviewReasons: [],
+  reviewedBy: "",
+  reviewedAt: "",
+  isRead: false,
+  markedReadBy: "",
+  markedReadAt: "",
+  attachmentCount: 2,
+  attachmentNames: ["email_001_SI.pdf", "email_001_BL.pdf"],
+  attachmentLinks: {},
+  emailBody: "Please check the attached SI and BL.",
+  siRef: "email_001_SI.pdf",
+  blRef: "email_001_BL.pdf",
+  extractedFields: fields(),
+  referenceFields: fields(),
+  discrepancies: [],
+  auditTrail: [],
+  ...over,
+});
