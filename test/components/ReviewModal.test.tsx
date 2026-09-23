@@ -31,6 +31,7 @@ const mount = (s: Shipment = shipment(), over: Partial<typeof handlers> & { savi
 const button = (name: string | RegExp) => screen.getByRole("button", { name });
 const input = (label: RegExp) => screen.getByLabelText(label) as HTMLInputElement;
 const toSideBySide = () => fireEvent.click(within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Side-by-Side Review" }));
+const toEmail = () => fireEvent.click(within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Read Email" }));
 const docBar = () => within(document.querySelector(".doc-bar") as HTMLElement);
 const formSide = () => within(document.querySelector(".form-side") as HTMLElement);
 const paperValue = (kind: "si" | "bl", n: number) => document.querySelectorAll(`.paper.${kind} .v`)[n];
@@ -55,7 +56,7 @@ describe("ReviewModal header", () => {
     fireEvent.click(button("Mark as Read"));
     expect(handlers.onMarkRead).toHaveBeenCalled();
     rerender(<ReviewModal shipment={shipment()} saving {...handlers} />);
-    expect((button("Saving…") as HTMLButtonElement).disabled).toBe(true);
+    expect((within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
     rerender(<ReviewModal shipment={shipment({ isRead: true })} saving={false} {...handlers} />);
     expect((button("Read") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -86,6 +87,7 @@ describe("ReviewModal header", () => {
 describe("ReviewModal email pane", () => {
   it("shows the email with its attachments, linking the ones in Drive", () => {
     mount(shipment({ attachmentLinks: { "email_001_SI.pdf": "https://drive.google.com/file/d/1/view" } }));
+    toEmail();
     expect(screen.getByRole("heading", { name: "SI and draft BL for review" })).toBeTruthy();
     expect(screen.getByText("Please check the attached SI and BL.")).toBeTruthy();
     expect(screen.getByText("Attachments (2)")).toBeTruthy();
@@ -97,6 +99,7 @@ describe("ReviewModal email pane", () => {
 
   it("opens the side-by-side review from the email", () => {
     mount();
+    toEmail();
     fireEvent.click(within(document.querySelector(".reply-actions")!).getByRole("button", { name: "Side-by-Side Review" }));
     expect(document.querySelector(".form-pane")).not.toBeNull();
   });
@@ -273,6 +276,7 @@ describe("ReviewModal AI reply", () => {
     const fetchMock = reply({ body: "  Dear Meridian,\nAll good.  " });
     vi.stubGlobal("fetch", fetchMock);
     mount(mismatch);
+    toEmail();
     fireEvent.click(button("Generate AI Reply"));
     expect(screen.getByRole("status").textContent).toBe("Generating reply…");
     await act(async () => {});
@@ -301,6 +305,7 @@ describe("ReviewModal AI reply", () => {
     const writeText = vi.fn(async () => {});
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     mount();
+    toEmail();
     fireEvent.click(button("Generate AI Reply"));
     await act(async () => {});
     fireEvent.change(screen.getByRole("textbox", { name: "AI Reply" }), { target: { value: "Draft, edited" } });
@@ -313,6 +318,7 @@ describe("ReviewModal AI reply", () => {
     vi.stubGlobal("fetch", reply({ body: "Draft" }));
     vi.stubGlobal("navigator", {});
     mount();
+    toEmail();
     fireEvent.click(button("Generate AI Reply"));
     await act(async () => {});
     await act(async () => fireEvent.click(button("Copy AI Reply")));
@@ -322,6 +328,7 @@ describe("ReviewModal AI reply", () => {
   it("reports a failed or empty reply", async () => {
     vi.stubGlobal("fetch", reply({ error: "Could not generate a reply." }, 502));
     mount();
+    toEmail();
     fireEvent.click(button("Generate AI Reply"));
     await act(async () => {});
     expect(handlers.onToast).toHaveBeenLastCalledWith("Reply generation failed: Could not generate a reply.");
@@ -340,6 +347,7 @@ describe("ReviewModal AI reply", () => {
       return new Promise((_, reject) => signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
     }));
     const { rerender } = mount();
+    toEmail();
     fireEvent.click(button("Generate AI Reply"));
     rerender(<ReviewModal shipment={shipment({ id: "email_002" })} saving={false} {...handlers} />);
     await act(async () => {});
