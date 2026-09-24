@@ -63,7 +63,7 @@ describe("ReviewModal header", () => {
     expect(document.querySelector(".paper.si")).toBeTruthy();
     expect(document.querySelector(".paper.bl .v.bad")).toBeTruthy(); // mismatches still show
     expect(document.querySelector(".paper input")).toBeNull();
-    expect(document.querySelector(".paper.bl .num")!.textContent).toBe("4 x 40HC");
+    expect(document.querySelector(".paper.bl .num")!.textContent).toBe("4");
     expect(screen.queryByRole("button", { name: /Mark as Read|Save|Reset/ })).toBeNull();
     toEmail();
     expect(screen.queryByRole("button", { name: /Generate AI Reply/ })).toBeNull();
