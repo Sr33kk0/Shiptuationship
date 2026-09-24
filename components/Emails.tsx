@@ -9,6 +9,7 @@ import { CATS, dayKey, fmtDate, fmtTime, voyageKey, type Category, type Edits, t
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
 import ExportEmails from "./ExportEmails";
+import FilterMenu, { type FilterOption } from "./FilterMenu";
 import { Icon } from "./Icon";
 import Pagination from "./Pagination";
 import Profile, { useMe } from "./Profile";
@@ -19,6 +20,7 @@ import VoyageGlobe from "./VoyageGlobe";
 
 type Filter = "all" | Category;
 type Sub = "all" | "needs-review" | "validated";
+type Seen = "all" | "unread" | "read";
 type SortKey = "id" | "subject" | "sender" | "category" | "rawDate" | "attachmentCount" | "status";
 
 const COLS: [SortKey, string][] = [
@@ -31,21 +33,21 @@ const COLS: [SortKey, string][] = [
   ["status", "Status"],
 ];
 
-// c = idle text colour, a = active background
-const FILTERS: { key: Filter; label: string; c: string; a: string; t?: string }[] = [
-  { key: "all", label: "All", c: "var(--muted)", a: "var(--solid)", t: "var(--on-solid)" },
-  { key: "document-comparison", label: "Comparisons", c: "#1d4ed8", a: "#2563eb" },
-  { key: "new-si", label: "SI Requests", c: "#7e22ce", a: "#9333ea" },
-  { key: "invoice", label: "Invoices", c: "#b45309", a: "#d97706" },
-  { key: "general", label: "General", c: "#525252", a: "#334155" },
-  { key: "spam", label: "Spam", c: "#be123c", a: "#e11d48" },
+const FILTERS: Filter[] = ["all", ...(Object.keys(CATS) as Category[])];
+const SUBS: { key: Sub; label: string; color?: string }[] = [
+  { key: "all", label: "All statuses" },
+  { key: "needs-review", label: "Needs Review", color: "#e11d48" },
+  { key: "validated", label: "Validated", color: "#059669" },
+];
+const SEENS: { key: Seen; label: string; color?: string }[] = [
+  { key: "all", label: "All emails" },
+  { key: "unread", label: "Unread", color: "var(--blue)" },
+  { key: "read", label: "Read" },
 ];
 
-const SUBS: { key: Sub; c: string; a: string; t: string }[] = [
-  { key: "all", c: "var(--muted)", a: "var(--edge)", t: "var(--ink)" },
-  { key: "needs-review", c: "#e11d48", a: "#ffe4e6", t: "#9f1239" },
-  { key: "validated", c: "#059669", a: "#d1fae5", t: "#065f46" },
-];
+const inCat = (s: Shipment, f: Filter) => f === "all" || s.category === f;
+const inSub = (s: Shipment, v: Sub) => v === "all" || s.status === (v === "needs-review" ? "discrepancy" : "clean");
+const inSeen = (s: Shipment, r: Seen) => r === "all" || s.isRead === (r === "read");
 
 const compare = (a: Shipment, b: Shipment, key: SortKey) => {
   const [x, y] = key === "rawDate" ? [a.at, b.at] : [a[key], b[key]]; // the Date column sorts by the full timestamp, so same-day emails keep their order
@@ -65,13 +67,15 @@ export default function Emails({ voyage }: { voyage?: string }) {
   const showToast = useToast();
   const me = useMe();
   const [saving, setSaving] = useState(false);
-  // Category and status live in the URL; legacy dashboard status links target Comparisons.
+  // Category, status and read state live in the URL; legacy dashboard status links target Comparisons.
   const params = useSearchParams();
   const view = params.get("view") ?? "";
   const legacySub = view === "needs-review" || view === "validated" ? view : "all";
   const status = params.get("status") ?? legacySub;
   const sub: Sub = status === "needs-review" || status === "validated" ? status : "all";
   const filter: Filter = Object.keys(CATS).includes(view) ? (view as Category) : legacySub !== "all" ? "document-comparison" : "all";
+  const seenParam = params.get("read");
+  const seen: Seen = seenParam === "unread" || seenParam === "read" ? seenParam : "all";
   const [query, setQuery] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rawDate", dir: "desc" });
@@ -81,11 +85,12 @@ export default function Emails({ voyage }: { voyage?: string }) {
   const [limit, setLimit] = useState(25);
   const table = useRef<HTMLDivElement>(null);
 
-  // Every tab is a real link to its own address.
-  const href = (f: Filter, s: Sub = sub) => {
+  // Every filter option is a real link to its own address, like the audit logs: /emails?view=invoice&status=validated&read=unread
+  const href = (f: Filter = filter, s: Sub = sub, r: Seen = seen) => {
     const search = new URLSearchParams(voyage ? { voyage } : {});
     if (f !== "all") search.set("view", f);
     if (s !== "all") search.set("status", s);
+    if (r !== "all") search.set("read", r);
     const path = voyage ? "/shipments" : "/emails";
     return search.size ? `${path}?${search}` : path;
   };
@@ -93,10 +98,18 @@ export default function Emails({ voyage }: { voyage?: string }) {
   const toggleSort = (key: SortKey) =>
     setSort((p) => (p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 
-  const categoryRows = pool.filter((s) => filter === "all" || s.category === filter);
-  const validated = categoryRows.filter((s) => s.status === "clean").length;
-  const needsReview = categoryRows.filter((s) => s.status === "discrepancy").length;
-  const count = (f: Filter) => (f === "all" ? pool.length : pool.filter((s) => s.category === f).length);
+  // each dropdown counts what it would show given the other two choices
+  const count = (f: Filter = filter, s: Sub = sub, r: Seen = seen) =>
+    loadState === "loading" ? undefined : pool.filter((x) => inCat(x, f) && inSub(x, s) && inSeen(x, r)).length;
+  const catOptions: FilterOption[] = FILTERS.map((f) => ({
+    key: f,
+    label: f === "all" ? "All categories" : CATS[f].label,
+    color: f === "all" ? undefined : CATS[f].color,
+    href: href(f),
+    count: count(f),
+  }));
+  const subOptions: FilterOption[] = SUBS.map((s) => ({ ...s, href: href(filter, s.key), count: count(filter, s.key) }));
+  const seenOptions: FilterOption[] = SEENS.map((r) => ({ ...r, href: href(filter, sub, r.key), count: count(filter, sub, r.key) }));
 
   const q = query.toLowerCase();
   const rows = pool
@@ -104,15 +117,12 @@ export default function Emails({ voyage }: { voyage?: string }) {
       if (![s.subject, s.sender, s.id].some((v) => v.toLowerCase().includes(q))) return false;
       if (range.start && dayKey(s) < range.start) return false;
       if (range.end && dayKey(s) > range.end) return false;
-      if (filter !== "all" && s.category !== filter) return false;
-      if (sub === "needs-review") return s.status === "discrepancy";
-      if (sub === "validated") return s.status === "clean";
-      return true;
+      return inCat(s, filter) && inSub(s, sub) && inSeen(s, seen);
     })
     .sort((a, b) => (sort.dir === "desc" ? -1 : 1) * compare(a, b, sort.key));
   const paged = paginate(rows, page, limit);
 
-  useEffect(() => setPage(1), [query, range.start, range.end, filter, sub, sort.key, sort.dir, route]);
+  useEffect(() => setPage(1), [query, range.start, range.end, filter, sub, seen, sort.key, sort.dir, route]);
   const goToPage = (next: number) => {
     setPage(next);
     table.current?.scrollTo({ top: 0 });
@@ -188,18 +198,14 @@ export default function Emails({ voyage }: { voyage?: string }) {
               )}
             </div>
 
+            <div className="dd-row">
+              <FilterMenu title="Category" value={filter} options={catOptions} />
+              <FilterMenu title="Status" value={sub} options={subOptions} />
+              <FilterMenu title="Read/Unread" value={seen} options={seenOptions} />
+            </div>
+
             <DateRangePicker value={range} onChange={setRange} />
             <ExportEmails rows={rows} disabled={loadState !== "ready" || saving || rows.length === 0} />
-          </div>
-
-          <div className="filters">
-            {FILTERS.map((f) => (
-              <Link key={f.key} href={href(f.key)} replace scroll={false} className="filter" aria-current={filter === f.key ? "page" : undefined} style={{ "--c": f.c, "--a": f.a, "--t": f.t } as React.CSSProperties}>
-                {f.label}
-                {loadState !== "loading" && ` (${count(f.key)})`}
-                {pool.some((s) => (f.key === "all" || s.category === f.key) && s.status === "discrepancy") && <span className="dot" role="img" aria-label="Needs Review" />}
-              </Link>
-            ))}
           </div>
 
           {/* the column headers double as sort buttons on wide screens; on phones they are hidden, so sorting moves here */}
@@ -212,18 +218,6 @@ export default function Emails({ voyage }: { voyage?: string }) {
               <Icon d="chevD" size={14} sw={2} />
             </button>
             <SortSheet open={sortOpen} options={COLS} value={sort.key} dir={sort.dir} onChange={(key, dir) => setSort({ key, dir })} onClose={() => setSortOpen(false)} />
-          </div>
-
-          <div className="substatus">
-              <span>Status:</span>
-              {SUBS.map((s) => (
-                <Link key={s.key} href={href(filter, s.key)} replace scroll={false} className="sub" aria-current={sub === s.key ? "page" : undefined} style={{ "--c": s.c, "--a": s.a, "--t": s.t } as React.CSSProperties}>
-                  {s.key === "needs-review" && <span className="dot" />}
-                  {s.key === "validated" && <Icon d="check" size={14} sw={2.2} />}
-                  {s.key === "all" ? "All" : s.key === "validated" ? "Validated" : "Needs Review"}
-                  {loadState !== "loading" && ` (${s.key === "all" ? categoryRows.length : s.key === "validated" ? validated : needsReview})`}
-                </Link>
-              ))}
           </div>
         </div>
 
@@ -244,8 +238,8 @@ export default function Emails({ voyage }: { voyage?: string }) {
                 })}
               </tr>
             </thead>
-            {/* keyed by tab so switching tabs replays the cascade; re-sorting replays it too (moved rows are re-inserted), typing and the 30s refresh do not */}
-            <tbody key={`${view}:${sub}`}>
+            {/* keyed by filter so switching filters replays the cascade; re-sorting replays it too (moved rows are re-inserted), typing and the 30s refresh do not */}
+            <tbody key={`${view}:${sub}:${seen}`}>
               {loadState === "loading" &&
                 rows.length === 0 &&
                 Array.from({ length: 8 }, (_, i) => (
