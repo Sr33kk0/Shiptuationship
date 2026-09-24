@@ -20,7 +20,7 @@ describe("proxy", () => {
   });
 
   it("lets an auditor read everything but change nothing", async () => {
-    for (const path of ["/dashboard", "/emails", "/audit/user", "/settings", "/api/emails", "/api/audit?source=user"]) {
+    for (const path of ["/dashboard", "/emails", "/shipments", "/audit/user", "/settings", "/api/emails", "/api/audit?source=user"]) {
       expect(proxy(request(path, auditor)).headers.get("x-middleware-next")).toBe("1");
     }
     for (const [path, method] of [["/api/emails/email_001/read", "POST"], ["/api/emails/email_001/review", "POST"], ["/api/auto-reply", "POST"], ["/api/emails", "PUT"], ["/api/emails", "DELETE"], ["/emails", "POST"]]) {
@@ -50,6 +50,6 @@ describe("proxy", () => {
   });
 
   it("guards the app pages and the API", () => {
-    expect(config.matcher).toEqual(["/dashboard/:path*", "/emails/:path*", "/audit/:path*", "/settings/:path*", "/api/:path*"]);
+    expect(config.matcher).toEqual(["/dashboard/:path*", "/emails/:path*", "/shipments/:path*", "/audit/:path*", "/settings/:path*", "/api/:path*"]);
   });
 });

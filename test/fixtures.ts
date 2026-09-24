@@ -31,6 +31,8 @@ export const shipment = (over: Partial<Shipment> = {}): Shipment => ({
   attachmentNames: ["email_001_SI.pdf", "email_001_BL.pdf"],
   attachmentLinks: {},
   emailBody: "Please check the attached SI and BL.",
+  vessel: "",
+  voyage: "",
   siRef: "email_001_SI.pdf",
   blRef: "email_001_BL.pdf",
   extractedFields: fields(),

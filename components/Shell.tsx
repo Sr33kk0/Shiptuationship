@@ -34,6 +34,7 @@ export function NavLink({ href, onClick, ...props }: ComponentProps<typeof Link>
 const PAGES = [
   { href: "/dashboard", label: "Dashboard Overview", icon: "dashboard" },
   { href: "/emails", label: "Emails", icon: "mail" },
+  { href: "/shipments", label: "Shipments", icon: "ship" },
   { href: "/audit/user", label: "User Log", icon: "user" },
   { href: "/audit/system", label: "System Log", icon: "chip" },
 ] as const;

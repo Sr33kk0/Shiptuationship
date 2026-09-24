@@ -47,6 +47,8 @@ export interface Shipment {
   attachmentNames: string[];
   attachmentLinks: Record<string, string>; // file name → its Google Drive link; only the SI and BL files have one
   emailBody: string;
+  vessel: string; // "" when the email names no vessel
+  voyage: string;
   siRef?: string;
   blRef?: string;
   extractedFields: Fields | null;
@@ -63,7 +65,20 @@ export const CATS: Record<Category, { label: string; color: string; bg: string }
   spam: { label: "Spam", color: "#be123c", bg: "#fff1f2" },
 };
 
-export const mismatches = (a: Fields, b: Fields) => FIELDS.filter((f) => a[f.key] !== b[f.key]).map((f) => f.key);
+// "Draft BL NAP 914 V.BS007 NHAVA SHEVA" → vessel "NAP 914", voyage "BS007": up to three capitalised words right before "V.<voyage>".
+// The subject wins over the body. Parsed on read, so every stored email is covered without an n8n change.
+// ponytail: stop-word list covers the inbox's subject prefixes; extend it when a new prefix sneaks into the vessel name.
+const WORD = String.raw`(?!(?:BL|DRAFT|UPDATE|SUMMARY|VESSEL|MV)\b)[A-Z0-9][A-Z0-9-]*`;
+const VOYAGE = new RegExp(String.raw`\b(?=[A-Z])(${WORD}(?: ${WORD}){0,2}) V\.\s?([A-Z0-9]+)\b`);
+export const parseVoyage = (...texts: string[]) => {
+  for (const t of texts) {
+    const m = VOYAGE.exec(t);
+    if (m) return { vessel: m[1], voyage: m[2] };
+  }
+  return { vessel: "", voyage: "" };
+};
+
+export const mismatches =(a: Fields, b: Fields) => FIELDS.filter((f) => a[f.key] !== b[f.key]).map((f) => f.key);
 
 // ---- when an email was classified, shown in the viewer's own time zone (built from the ISO timestamp `at`) ----
 const p2 = (n: number) => String(n).padStart(2, "0");

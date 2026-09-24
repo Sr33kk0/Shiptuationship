@@ -39,7 +39,7 @@ describe("Shell", () => {
   it("lists every page and marks the current one", () => {
     pathname = "/audit/user";
     mount();
-    for (const name of ["Dashboard Overview", "Emails", "User Log", "System Log", "Settings"]) expect(link(name)).toBeTruthy();
+    for (const name of ["Dashboard Overview", "Emails", "Shipments", "User Log", "System Log", "Settings"]) expect(link(name)).toBeTruthy();
     expect(link("User Log").getAttribute("aria-current")).toBe("page");
     expect(link("User Log").className).toContain("active");
     expect(link("Emails").getAttribute("aria-current")).toBeNull();
