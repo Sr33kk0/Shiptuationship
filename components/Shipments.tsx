@@ -1,23 +1,29 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { CATS, fmtWhen, type Shipment } from "@/lib/shipments";
+import { fmtWhen, voyageKey, type Shipment } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
+import Emails from "./Emails";
 import { Icon } from "./Icon";
 import Profile from "./Profile";
 import { NavLink } from "./Shell";
 
-// One row per vessel + voyage (read from each email's subject or body), newest activity first.
-// Opening a row lists its emails; each one opens in the Emails review.
+// /shipments lists the voyages; /shipments?voyage=NAP%20914%20V.BS007 is one voyage's page (its route on a globe, then its emails).
 export default function Shipments() {
+  const voyage = useSearchParams().get("voyage");
+  return voyage ? <Emails voyage={voyage} /> : <ShipmentList />;
+}
+
+// One row per vessel + voyage (read from each email's subject or body), newest activity first.
+function ShipmentList() {
   const { shipments, loadState } = useShipments();
   const [query, setQuery] = useState("");
 
   const groups = new Map<string, Shipment[]>();
   for (const s of shipments) {
-    if (!s.voyage) continue;
-    const key = `${s.vessel} V.${s.voyage}`;
-    groups.set(key, [...(groups.get(key) ?? []), s]);
+    const key = voyageKey(s);
+    if (key) groups.set(key, [...(groups.get(key) ?? []), s]);
   }
   const q = query.toLowerCase();
   const rows = [...groups]
@@ -65,42 +71,28 @@ export default function Shipments() {
               const review = emails.filter((s) => s.status === "discrepancy").length;
               return (
                 <li key={key} style={{ "--d": `${Math.min(i, 14) * 0.03}s` } as React.CSSProperties}>
-                  <details className="ship">
-                    <summary>
-                      <span className="ship-ic">
-                        <Icon d="ship" size={18} />
+                  <NavLink className="ship" href={`/shipments?voyage=${encodeURIComponent(key)}`}>
+                    <span className="ship-ic">
+                      <Icon d="ship" size={18} />
+                    </span>
+                    <span className="ship-name">
+                      <b>{latest.vessel}</b>
+                      <span className="ship-voy">Voyage {latest.voyage}</span>
+                    </span>
+                    {review > 0 && (
+                      <span className="status rose">
+                        <span className="dot" />
+                        {review} Needs Review
                       </span>
-                      <span className="ship-name">
-                        <b>{latest.vessel}</b>
-                        <span className="ship-voy">Voyage {latest.voyage}</span>
-                      </span>
-                      {review > 0 && (
-                        <span className="status rose">
-                          <span className="dot" />
-                          {review} Needs Review
-                        </span>
-                      )}
-                      <span className="ship-meta muted">
-                        <b>{emails.length}</b> {emails.length === 1 ? "email" : "emails"}
-                        <small>{fmtWhen(latest)}</small>
-                      </span>
-                      <span className="ship-chev">
-                        <Icon d="chevD" size={14} sw={2} />
-                      </span>
-                    </summary>
-                    <ul className="ship-emails">
-                      {emails.map((s) => (
-                        <li key={s.id}>
-                          <NavLink href={`/emails?open=${encodeURIComponent(s.id)}`}>
-                            <span className="id">{s.id}</span>
-                            <span className="subj trunc" title={s.subject}>{s.subject}</span>
-                            <span className="tag" style={{ color: CATS[s.category].color, background: CATS[s.category].bg }}>{CATS[s.category].label}</span>
-                            <span className="when muted">{fmtWhen(s)}</span>
-                          </NavLink>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
+                    )}
+                    <span className="ship-meta muted">
+                      <b>{emails.length}</b> {emails.length === 1 ? "email" : "emails"}
+                      <small>{fmtWhen(latest)}</small>
+                    </span>
+                    <span className="ship-chev">
+                      <Icon d="chevR" size={14} sw={2} />
+                    </span>
+                  </NavLink>
                 </li>
               );
             })}

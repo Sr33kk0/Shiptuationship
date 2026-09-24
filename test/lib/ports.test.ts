@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { countByCountry, countryName, portCountry } from "@/lib/ports";
+import { countByCountry, countryName, portCountry, portName, voyageLegs } from "@/lib/ports";
+import { fields, shipment } from "@/test/fixtures";
 
 describe("portCountry", () => {
   it("uses the UN/LOCODE in brackets", () => {
@@ -61,5 +62,29 @@ describe("countByCountry", () => {
 
   it("handles no ports", () => {
     expect(countByCountry([])).toEqual({ rows: [], placed: 0, unplaced: 0 });
+  });
+});
+
+describe("portName", () => {
+  it("drops the country and the UN/LOCODE", () => {
+    expect(portName("JAWAHARLAL NEHRU (NHAVA SHEVA), INDIA (INNSA)")).toBe("JAWAHARLAL NEHRU (NHAVA SHEVA)");
+    expect(portName("SGSIN")).toBe("SGSIN");
+  });
+});
+
+describe("voyageLegs", () => {
+  it("lists one leg per distinct POL -> POD, from validated comparisons and other emails only", () => {
+    expect(voyageLegs([
+      shipment({ id: "email_001" }),
+      shipment({ id: "email_002", extractedFields: fields({ pol: " PORT KLANG, MALAYSIA (MYPKG) ", pod: "ROTTERDAM, NETHERLANDS (NLRTM)" }) }),
+      shipment({ id: "email_003", status: "discrepancy", extractedFields: fields({ pol: "Busan, South Korea (KRPUS)" }) }),
+      shipment({ id: "email_004", status: "pending", extractedFields: fields({ pol: "Busan, South Korea (KRPUS)" }) }),
+      shipment({ id: "email_005", category: "new-si", status: "pending", extractedFields: null, referenceFields: fields({ pod: "Long Beach, USA (USLGB)" }) }),
+      shipment({ id: "email_006", extractedFields: fields({ pod: " " }) }),
+      shipment({ id: "email_007", category: "general", extractedFields: null, referenceFields: null }),
+    ])).toEqual([
+      { pol: "Port Klang, Malaysia (MYPKG)", pod: "Rotterdam, Netherlands (NLRTM)", emails: ["email_001", "email_002"] },
+      { pol: "Port Klang, Malaysia (MYPKG)", pod: "Long Beach, USA (USLGB)", emails: ["email_005"] },
+    ]);
   });
 });

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { paginate } from "@/lib/pagination";
-import { CATS, dayKey, fmtDate, fmtTime, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { legColor, legKey, portName, voyageLegs } from "@/lib/ports";
+import { CATS, dayKey, fmtDate, fmtTime, voyageKey, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
 import ExportEmails from "./ExportEmails";
@@ -14,6 +15,7 @@ import Profile, { useMe } from "./Profile";
 import ReviewModal from "./ReviewModal";
 import SortSheet from "./SortSheet";
 import { useToast } from "./Shell";
+import VoyageGlobe from "./VoyageGlobe";
 
 type Filter = "all" | Category;
 type Sub = "all" | "needs-review" | "validated";
@@ -50,8 +52,16 @@ const compare = (a: Shipment, b: Shipment, key: SortKey) => {
   return typeof x === "number" ? x - (y as number) : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" });
 };
 
-export default function Emails() {
+// With `voyage` ("NAP 914 V.BS007") this is that voyage's page, opened from Shipments: its route on a globe, then only its emails.
+export default function Emails({ voyage }: { voyage?: string }) {
   const { shipments, setShipments, loadState, busy } = useShipments();
+  const inVoyage = voyage ? shipments.filter((s) => voyageKey(s) === voyage) : shipments;
+  // A voyage's page can narrow the list to one leg, picked beside the globe.
+  const [route, setRoute] = useState<string | null>(null);
+  const legs = voyage ? voyageLegs(inVoyage) : [];
+  const legAt = legs.findIndex((l) => legKey(l) === route);
+  const leg = legs[legAt];
+  const pool = leg ? inVoyage.filter((s) => leg.emails.includes(s.id)) : inVoyage;
   const showToast = useToast();
   const me = useMe();
   const [saving, setSaving] = useState(false);
@@ -65,7 +75,7 @@ export default function Emails() {
   const [query, setQuery] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rawDate", dir: "desc" });
-  const [openId, setOpenId] = useState<string | null>(params.get("open")); // /emails?open=email_070 opens that email (the Shipments page links here)
+  const [openId, setOpenId] = useState<string | null>(params.get("open")); // /emails?open=email_070 opens that email
   const [sortOpen, setSortOpen] = useState(false); // the sort sheet (phones and tablets)
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -73,22 +83,23 @@ export default function Emails() {
 
   // Every tab is a real link to its own address.
   const href = (f: Filter, s: Sub = sub) => {
-    const search = new URLSearchParams();
+    const search = new URLSearchParams(voyage ? { voyage } : {});
     if (f !== "all") search.set("view", f);
     if (s !== "all") search.set("status", s);
-    return search.size ? `/emails?${search}` : "/emails";
+    const path = voyage ? "/shipments" : "/emails";
+    return search.size ? `${path}?${search}` : path;
   };
 
   const toggleSort = (key: SortKey) =>
     setSort((p) => (p.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 
-  const categoryRows = shipments.filter((s) => filter === "all" || s.category === filter);
+  const categoryRows = pool.filter((s) => filter === "all" || s.category === filter);
   const validated = categoryRows.filter((s) => s.status === "clean").length;
   const needsReview = categoryRows.filter((s) => s.status === "discrepancy").length;
-  const count = (f: Filter) => (f === "all" ? shipments.length : shipments.filter((s) => s.category === f).length);
+  const count = (f: Filter) => (f === "all" ? pool.length : pool.filter((s) => s.category === f).length);
 
   const q = query.toLowerCase();
-  const rows = shipments
+  const rows = pool
     .filter((s) => {
       if (![s.subject, s.sender, s.id].some((v) => v.toLowerCase().includes(q))) return false;
       if (range.start && dayKey(s) < range.start) return false;
@@ -101,7 +112,7 @@ export default function Emails() {
     .sort((a, b) => (sort.dir === "desc" ? -1 : 1) * compare(a, b, sort.key));
   const paged = paginate(rows, page, limit);
 
-  useEffect(() => setPage(1), [query, range.start, range.end, filter, sub, sort.key, sort.dir]);
+  useEffect(() => setPage(1), [query, range.start, range.end, filter, sub, sort.key, sort.dir, route]);
   const goToPage = (next: number) => {
     setPage(next);
     table.current?.scrollTo({ top: 0 });
@@ -140,14 +151,32 @@ export default function Emails() {
     <div className="scroll">
       <header className="page-head fade-up">
         <div>
-          <h1>Emails</h1>
-          <p>Incoming email queue with category filters, search, and review.</p>
+          {voyage && (
+            <Link href="/shipments" className="back-link">
+              <Icon d="chevL" size={14} sw={2} />
+              Shipments
+            </Link>
+          )}
+          <h1>{voyage ?? "Emails"}</h1>
+          <p>{voyage ? "Where this voyage sails, and every email about it." : "Incoming email queue with category filters, search, and review."}</p>
         </div>
         <Profile />
       </header>
 
+      {voyage && <VoyageGlobe legs={legs} loading={loadState === "loading"} selected={leg ? route : null} onSelect={setRoute} />}
+
       <section className="queue fade-up" style={{ "--d": "0.12s" } as React.CSSProperties}>
         <div className="toolbar">
+          {leg && (
+            <div className="leg-filter">
+              <span>Leg:</span>
+              <button onClick={() => setRoute(null)} title="Show every email of this voyage" aria-label={`Clear the leg filter ${portName(leg.pol)} to ${portName(leg.pod)}`}>
+                <i className="legend-dot" style={{ background: legColor(legAt) }} />
+                {portName(leg.pol)} → {portName(leg.pod)}
+                <Icon d="x" size={12} sw={2.2} />
+              </button>
+            </div>
+          )}
           <div className="toolbar-row">
             <div className="search">
               <Icon d="search" />
@@ -168,7 +197,7 @@ export default function Emails() {
               <Link key={f.key} href={href(f.key)} replace scroll={false} className="filter" aria-current={filter === f.key ? "page" : undefined} style={{ "--c": f.c, "--a": f.a, "--t": f.t } as React.CSSProperties}>
                 {f.label}
                 {loadState !== "loading" && ` (${count(f.key)})`}
-                {shipments.some((s) => (f.key === "all" || s.category === f.key) && s.status === "discrepancy") && <span className="dot" role="img" aria-label="Needs Review" />}
+                {pool.some((s) => (f.key === "all" || s.category === f.key) && s.status === "discrepancy") && <span className="dot" role="img" aria-label="Needs Review" />}
               </Link>
             ))}
           </div>
