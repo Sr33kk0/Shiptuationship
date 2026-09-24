@@ -35,6 +35,8 @@ export const shipment = (over: Partial<Shipment> = {}): Shipment => ({
   blRef: "email_001_BL.pdf",
   extractedFields: fields(),
   referenceFields: fields(),
+  originalExtractedFields: fields(),
+  originalReferenceFields: fields(),
   discrepancies: [],
   auditTrail: [],
   ...over,

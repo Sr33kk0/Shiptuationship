@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CATS, FIELDS, fmtWhen, mismatches, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { CATS, FIELDS, fmtWhen, mismatches, type Edits, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { printEmail } from "@/lib/printEmail";
 import { Icon } from "./Icon";
 
 type Pane = "preview" | "email";
-type DocView = "split" | "si" | "bl";
 
-function Seg<T extends string>({ value, options, onChange, sm }: { value: T; options: [T, string][]; onChange: (v: T) => void; sm?: boolean }) {
+function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
-    <div className={`seg${sm ? " sm" : ""}`}>
+    <div className="seg">
       {options.map(([v, label]) => (
         <button key={v} aria-pressed={value === v} onClick={() => onChange(v)}>
           {label}
@@ -20,19 +19,32 @@ function Seg<T extends string>({ value, options, onChange, sm }: { value: T; opt
   );
 }
 
-// One document. A field that differs from the other document is shown in red, but only on the document being edited (see the calls below).
-function Paper({ kind, refNo, values, bad }: { kind: "si" | "bl"; refNo?: string; values: Fields; bad: FieldKey[] }) {
-  const cell = (k: FieldKey, label: string, extra = "", fmt = (v: string) => v) => (
-    <div>
-      <span className="k">{label}</span>
-      <span className={`v${extra}${bad.includes(k) ? " bad" : ""}`}>{fmt(values[k])}</span>
-    </div>
-  );
+// One document. A field that differs from the other document is shown in red. With `onChange` its fields are edited in place;
+// without it (auditors) it is plain text.
+function Paper({ kind, refNo, values, bad, onChange, disabled }: { kind: Side; refNo?: string; values: Fields; bad: FieldKey[]; onChange?: (f: Fields) => void; disabled?: boolean }) {
+  const name = kind === "si" ? "Shipping Instruction" : "Draft Bill of Lading";
+  const cell = (k: FieldKey, label: string, extra = "", unit = "") => {
+    const cls = `v${extra}${bad.includes(k) ? " bad" : ""}`;
+    return onChange ? (
+      <label>
+        <span className="k">{label}</span>
+        <span className="v-edit">
+          <input type="text" className={cls} disabled={disabled} value={values[k] ?? ""} onChange={(e) => onChange({ ...values, [k]: e.target.value })} />
+          {unit && <span className="unit">{unit}</span>}
+        </span>
+      </label>
+    ) : (
+      <div>
+        <span className="k">{label}</span>
+        <span className={cls}>{values[k]}{unit && ` ${unit}`}</span>
+      </div>
+    );
+  };
   return (
-    <div className={`paper ${kind}`}>
+    <div className={`paper ${kind}`} role="group" aria-label={name}>
       <div className="paper-head">
         <div>
-          <h4>{kind === "si" ? "Shipping Instruction" : "Draft Bill of Lading"}</h4>
+          <h4>{name}</h4>
           <small>{kind === "si" ? "Customer Reference" : "Carrier Verification Draft"}</small>
         </div>
         {refNo && <span className="ref">{refNo}</span>}
@@ -46,8 +58,8 @@ function Paper({ kind, refNo, values, bad }: { kind: "si" | "bl"; refNo?: string
           {cell("pod", "5. POD", " port")}
         </div>
         <div className="paper-row">
-          {cell("containerCount", "6. Container Count", " num", (v) => `${v} x 40HC`)}
-          {cell("grossWeightKg", "7. Gross Weight", " num", (v) => `${v} kg`)}
+          {cell("containerCount", "6. Container Count", " num", "x 40HC")}
+          {cell("grossWeightKg", "7. Gross Weight", " num", "kg")}
         </div>
       </div>
     </div>
@@ -116,7 +128,7 @@ interface Props {
   shipment: Shipment;
   saving: boolean;
   onClose: () => void;
-  onSave: (side: Side, fields: Fields) => void;
+  onSave: (edits: Edits) => void; // the SI and BL, saved together
   onMarkRead: () => void;
   onToast: (msg: string) => void;
   readOnly?: boolean; // auditors: no edit form, Mark as Read or AI Reply (proxy.ts refuses them anyway)
@@ -128,25 +140,22 @@ const actionTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { time
 
 export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast, readOnly, onPrev, onNext }: Props) {
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
-  const [side, setSide] = useState<Side>("bl"); // which document the form edits
-  const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
+  const savedDrafts = () => ({ si: s.referenceFields ?? ({} as Fields), bl: s.extractedFields ?? ({} as Fields) });
+  const [drafts, setDrafts] = useState<Edits>(savedDrafts); // both documents are edited in place and saved together
   const [pane, setPane] = useState<Pane>("preview");
   const [reply, setReply] = useState<Reply | null>(null);
   const [generating, setGenerating] = useState(false);
   const replyRequest = useRef<AbortController>(null);
   const [reasonsOpen, setReasonsOpen] = useState(true); // phones only: the review reasons can be folded away (the button is hidden, and the fold ignored, on desktop)
-  // Stepping to another email keeps the modal (and the chosen pane) open; only the form belongs to one email, so it restarts here.
+  // Stepping to another email keeps the modal (and the chosen pane) open; only the edits belong to one email, so they restart here.
   const [shownId, setShownId] = useState(s.id);
   if (shownId !== s.id) {
     replyRequest.current?.abort();
     setShownId(s.id);
-    setSide("bl");
-    setForm(s.extractedFields ?? ({} as Fields));
+    setDrafts(savedDrafts());
     setReply(null);
     setGenerating(false);
   }
-  const [docView, setDocView] = useState<DocView>("split");
-  const [formOpen, setFormOpen] = useState(true);
   const cat = CATS[s.category];
 
   // Every way out (X, Escape, Close) plays the exit first, then hands over to the parent, which unmounts the modal.
@@ -189,52 +198,42 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
     setClosing(true);
     exitTimer.current = window.setTimeout(then, 200); // keep in step with the 0.2s exit in globals.css
   };
-  const close = () => leave(onClose);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && leave(onClose);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const same = (a: Edits, b: Edits) => FIELDS.every((f) => a.si[f.key] === b.si[f.key] && a.bl[f.key] === b.bl[f.key]);
+  const saved = savedDrafts();
+  const original = { si: s.originalReferenceFields ?? saved.si, bl: s.originalExtractedFields ?? saved.bl };
+  const dirty = (["si", "bl"] as const).filter((x) => FIELDS.some((f) => drafts[x][f.key] !== saved[x][f.key]));
+  // Leaving this email (close, or step to another) with unsaved edits asks first; `confirm` holds where to go if the answer is Discard.
+  const [confirm, setConfirm] = useState<(() => void) | null>(null);
+  const guard = (go: () => void) => (dirty.length ? setConfirm(() => go) : go());
+  const close = () => guard(() => leave(onClose));
+  const step = (go?: () => void) => go && guard(go);
 
-  const saved = (x: Side) => (x === "si" ? s.referenceFields : s.extractedFields);
-  const dirty = FIELDS.some((f) => form[f.key] !== saved(side)?.[f.key]);
-  const copy = (text: string, what: string) =>
-    (navigator.clipboard?.writeText(text) ?? Promise.reject()).then(
-      () => onToast(`Copied ${what}`),
-      () => onToast("Could not copy — select the text and copy it manually"),
-    );
-  const step = (go?: () => void) => {
-    if (!go) return;
-    if (dirty) onToast(`Discarded unsaved ${side.toUpperCase()} edits`);
-    go();
-  };
-
+  // Re-bound on every render so the keys always see the current edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (confirm) return e.key === "Escape" && setConfirm(null); // Escape answers the question with Keep Editing
+      if (e.key === "Escape") return close();
       if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]")) return; // not while typing in a field
       if (e.key === "ArrowRight") step(onNext);
       if (e.key === "ArrowLeft") step(onPrev);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onPrev, onNext, dirty, side]);
+  });
+  const copy = (text: string, what: string) =>
+    (navigator.clipboard?.writeText(text) ?? Promise.reject()).then(
+      () => onToast(`Copied ${what}`),
+      () => onToast("Could not copy — select the text and copy it manually"),
+    );
 
-  const switchSide = (next: Side) => {
-    if (next === side) return;
-    if (dirty) onToast(`Discarded unsaved ${side.toUpperCase()} edits`);
-    setSide(next);
-    setForm(saved(next) ?? ({} as Fields));
-  };
-
-  // The edited side shows the live form; the other side shows what is saved.
-  const si = side === "si" ? form : s.referenceFields;
-  const bl = side === "bl" ? form : s.extractedFields;
-  const bad = si && bl ? mismatches(si, bl) : [];
+  const { si, bl } = drafts;
+  const bad = isCmp ? mismatches(si, bl) : [];
   // What to mark. Normally the live comparison of the two documents. If the automatic check flagged the email but the two documents match
   // exactly (it can compare more loosely than this screen does), fall back to the fields it named, so the banner never has nothing to point at.
   const named = s.status === "discrepancy" ? s.discrepancies.map((d) => d.field) : [];
-  const flagged: FieldKey[] = bad.length ? bad : !dirty ? named : [];
+  const flagged: FieldKey[] = bad.length ? bad : !dirty.length ? named : [];
+  const edit = (x: Side) => (readOnly ? undefined : (f: Fields) => setDrafts({ ...drafts, [x]: f }));
 
   return (
     <div className={`overlay${closing ? " closing" : ""}`}>
@@ -297,95 +296,38 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
           </section>
         )}
 
-        {isCmp && si && bl ? (
+        {isCmp ? (
           <div className="cmp">
             <div className="cmp-body">
-              {/* the form only belongs with the documents; reading the email gets the whole window (edits are kept while it is hidden) */}
-              {!readOnly && formOpen && pane === "preview" && (
-                <div className="form-pane">
-                  <div className="form-head">
-                    <b>Manifest Fields</b>
-                    <span>Edit to override</span>
-                  </div>
-                  <div className="form-side">
-                    <span>Editing</span>
-                    <Seg
-                      sm
-                      value={side}
-                      onChange={switchSide}
-                      options={[
-                        ["bl", "Carrier Draft BL"],
-                        ["si", "Customer SI"],
-                      ]}
-                    />
-                  </div>
-                  <div className="form-fields">
-                    {FIELDS.map((f, i) => {
-                      const off = flagged.includes(f.key);
-                      return (
-                        <div key={f.key} className="field">
-                          <div className="field-top">
-                            <label htmlFor={`f-${f.key}`}>
-                              {i + 1}. {f.label}
-                            </label>
-                            {off && (
-                              <span>
-                                {side === "si" ? "BL" : "SI"}: {(side === "si" ? bl : si)[f.key]}
-                                {"unit" in f ? f.unit : ""}
-                              </span>
-                            )}
-                          </div>
-                          <input id={`f-${f.key}`} type="text" disabled={saving} className={off ? "bad" : ""} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="form-foot">
-                    <button
-                      className="btn ghost"
-                      disabled={saving}
-                      onClick={() => {
-                        setForm(saved(side)!);
-                        onToast(`Reset ${side.toUpperCase()} fields to their last saved values`);
-                      }}
-                    >
-                      <Icon d="refresh" size={14} sw={2} />
-                      Reset
-                    </button>
-                    <button className="btn dark grow" disabled={saving} onClick={() => onSave(side, form)}>
-                      <Icon d="check" size={14} sw={2.2} />
-                      {saving ? "Saving…" : `Save ${side.toUpperCase()} Changes`}
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <div className="doc-pane">
                 {pane === "preview" ? (
                   <>
-                    <div className="doc-bar">
-                      {!readOnly && (
-                        <button className="toggle" onClick={() => setFormOpen(!formOpen)}>
-                          {formOpen ? "Maximize Document Space" : "Show Edit Form"}
-                        </button>
-                      )}
-                      <Seg
-                        sm
-                        value={docView}
-                        onChange={setDocView}
-                        options={[
-                          ["split", "Side-by-Side"],
-                          ["si", "Customer SI"],
-                          ["bl", "Carrier Draft BL"],
-                        ]}
-                      />
-                    </div>
                     <div className="docs">
-                      {/* keyed by the email and the view, so each switch re-creates the papers and they fade in again (typing in the form does not) */}
-                      {/* the red text follows the document being edited (the "Editing" switch): the SI's wrong fields when editing the SI, the BL's when editing the BL, never both */}
-                      {docView !== "bl" && <Paper key={`si-${s.id}-${docView}`} kind="si" refNo={s.siRef} values={si} bad={side === "si" ? flagged : []} />}
-                      {docView !== "si" && <Paper key={`bl-${s.id}-${docView}`} kind="bl" refNo={s.blRef} values={bl} bad={side === "bl" ? flagged : []} />}
+                      {/* keyed by the email, so stepping re-creates the papers and they fade in again (typing in them does not) */}
+                      {/* both documents are edited in place; a field that differs is red on both */}
+                      <Paper key={`si-${s.id}`} kind="si" refNo={s.siRef} values={si} bad={flagged} onChange={edit("si")} disabled={saving} />
+                      <Paper key={`bl-${s.id}`} kind="bl" refNo={s.blRef} values={bl} bad={flagged} onChange={edit("bl")} disabled={saving} />
                     </div>
+                    {!readOnly && (
+                      <div className="doc-foot">
+                        {/* back to what n8n extracted, before any human review; it is kept only once saved */}
+                        <button
+                          className="btn ghost"
+                          disabled={saving || same(drafts, original)}
+                          onClick={() => {
+                            setDrafts(original);
+                            onToast("Reset to the original documents. Save Changes to keep it.");
+                          }}
+                        >
+                          <Icon d="refresh" size={14} sw={2} />
+                          Reset to Original
+                        </button>
+                        <button className="btn dark" disabled={saving || !dirty.length} onClick={() => onSave(drafts)}>
+                          <Icon d="check" size={14} sw={2.2} />
+                          {saving ? "Saving…" : "Save Changes"}
+                        </button>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="email">
@@ -456,6 +398,28 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
       <button className="nav-email next" disabled={!onNext} onClick={() => step(onNext)} aria-label="Next email" title="Next email (right arrow key)">
         <Icon d="chevR" size={20} sw={2.4} />
       </button>
+      {confirm && (
+        <div className="confirm-back">
+          <div className="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+            <h3 id="confirm-title">Discard unsaved changes?</h3>
+            <p id="confirm-text">Your changes to the {dirty.map((x) => x.toUpperCase()).join(" and ")} have not been saved. They will be lost if you leave this email.</p>
+            <div className="confirm-actions">
+              <button className="btn ghost" autoFocus onClick={() => setConfirm(null)}>
+                Keep Editing
+              </button>
+              <button
+                className="btn danger"
+                onClick={() => {
+                  setConfirm(null);
+                  confirm();
+                }}
+              >
+                Discard Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

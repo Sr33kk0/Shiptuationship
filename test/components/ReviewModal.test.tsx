@@ -29,12 +29,9 @@ const mount = (s: Shipment = shipment(), over: Partial<typeof handlers> & { savi
   return render(<ReviewModal shipment={s} saving={saving} {...handlers} />);
 };
 const button = (name: string | RegExp) => screen.getByRole("button", { name });
-const input = (label: RegExp) => screen.getByLabelText(label) as HTMLInputElement;
-const toSideBySide = () => fireEvent.click(within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Side-by-Side Review" }));
+const paper = (kind: "si" | "bl") => within(screen.getByRole("group", { name: kind === "si" ? "Shipping Instruction" : "Draft Bill of Lading" }));
+const input = (label: RegExp, kind: "si" | "bl" = "bl") => paper(kind).getByLabelText(label) as HTMLInputElement;
 const toEmail = () => fireEvent.click(within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Read Email" }));
-const docBar = () => within(document.querySelector(".doc-bar") as HTMLElement);
-const formSide = () => within(document.querySelector(".form-side") as HTMLElement);
-const paperValue = (kind: "si" | "bl", n: number) => document.querySelectorAll(`.paper.${kind} .v`)[n];
 const mismatch = shipment({ referenceFields: fields(), extractedFields: fields({ containerCount: "4" }) });
 
 describe("ReviewModal header", () => {
@@ -65,8 +62,9 @@ describe("ReviewModal header", () => {
     render(<ReviewModal shipment={mismatch} saving={false} readOnly {...handlers} />);
     expect(document.querySelector(".paper.si")).toBeTruthy();
     expect(document.querySelector(".paper.bl .v.bad")).toBeTruthy(); // mismatches still show
-    expect(document.querySelector(".form-pane")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Mark as Read|Show Edit Form|Maximize Document Space|Save|Reset/ })).toBeNull();
+    expect(document.querySelector(".paper input")).toBeNull();
+    expect(document.querySelector(".paper.bl .num")!.textContent).toBe("4 x 40HC");
+    expect(screen.queryByRole("button", { name: /Mark as Read|Save|Reset/ })).toBeNull();
     toEmail();
     expect(screen.queryByRole("button", { name: /Generate AI Reply/ })).toBeNull();
     cleanup();
@@ -115,97 +113,113 @@ describe("ReviewModal email pane", () => {
     mount();
     toEmail();
     fireEvent.click(within(document.querySelector(".reply-actions")!).getByRole("button", { name: "Side-by-Side Review" }));
-    expect(document.querySelector(".form-pane")).not.toBeNull();
+    expect(document.querySelector(".paper input")).not.toBeNull();
   });
 });
 
 describe("ReviewModal side-by-side review", () => {
-  it("edits the draft BL by default and saves the form", () => {
+  const saveButton = () => button("Save Changes") as HTMLButtonElement;
+  const resetButton = () => button(/Reset to Original/) as HTMLButtonElement;
+
+  it("edits both documents in place and saves them together", () => {
     mount();
-    toSideBySide();
     expect(input(/Shipper/).value).toBe("Meridian Textiles Sdn Bhd");
+    expect(saveButton().disabled).toBe(true); // nothing to save yet
     fireEvent.change(input(/Container Count/), { target: { value: "5" } });
-    fireEvent.click(button("Save BL Changes"));
-    expect(handlers.onSave).toHaveBeenCalledWith("bl", fields({ containerCount: "5" }));
+    fireEvent.change(input(/Shipper/, "si"), { target: { value: "New SI shipper" } });
+    fireEvent.click(saveButton());
+    expect(handlers.onSave).toHaveBeenCalledWith({ si: fields({ shipper: "New SI shipper" }), bl: fields({ containerCount: "5" }) });
   });
 
-  it("marks live differences on the document being edited only", () => {
+  it("marks live differences on both documents", () => {
     mount();
-    toSideBySide();
     fireEvent.change(input(/Container Count/), { target: { value: "4" } });
-    expect(input(/Container Count/).className).toBe("bad");
-    expect(input(/Container Count/).closest(".field")!.textContent).toContain("SI: 3 units");
-    expect(paperValue("bl", 5).className).toContain("bad");
-    expect(paperValue("si", 5).className).not.toContain("bad");
-    expect(paperValue("bl", 5).textContent).toBe("4 x 40HC");
-    expect(paperValue("bl", 6).textContent).toBe("22000 kg");
+    expect(input(/Container Count/).className).toContain("bad");
+    expect(input(/Container Count/, "si").className).toContain("bad");
+    expect(input(/Shipper/).className).not.toContain("bad");
+    fireEvent.change(input(/Container Count/, "si"), { target: { value: "4" } });
+    expect(input(/Container Count/).className).not.toContain("bad");
   });
 
-  it("resets the form to the saved values", () => {
-    mount();
-    toSideBySide();
-    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
-    fireEvent.click(button(/Reset/));
-    expect(input(/Shipper/).value).toBe("Meridian Textiles Sdn Bhd");
-    expect(handlers.onToast).toHaveBeenCalledWith("Reset BL fields to their last saved values");
-  });
-
-  it("switches to editing the SI, discarding unsaved BL edits", () => {
-    mount(mismatch);
-    toSideBySide();
-    expect(input(/Container Count/).value).toBe("4");
-    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
-    fireEvent.click(formSide().getByRole("button", { name: "Customer SI" }));
-    expect(handlers.onToast).toHaveBeenCalledWith("Discarded unsaved BL edits");
-    expect(input(/Container Count/).value).toBe("3");
-    expect(input(/Container Count/).closest(".field")!.textContent).toContain("BL: 4 units");
-    expect(paperValue("si", 5).className).toContain("bad");
-    expect(paperValue("bl", 5).className).not.toContain("bad");
-    fireEvent.click(button("Save SI Changes"));
-    expect(handlers.onSave).toHaveBeenCalledWith("si", fields());
-    fireEvent.click(formSide().getByRole("button", { name: "Customer SI" }));
-    expect(handlers.onToast).toHaveBeenCalledTimes(1); // same side: nothing to discard
+  it("resets both documents to the originals from before any review, to be saved", () => {
+    mount(shipment({ referenceFields: fields({ shipper: "Reviewed SI" }), extractedFields: fields({ containerCount: "4" }), originalExtractedFields: fields({ containerCount: "9" }) }));
+    fireEvent.click(resetButton());
+    expect(input(/Shipper/, "si").value).toBe("Meridian Textiles Sdn Bhd");
+    expect(input(/Container Count/).value).toBe("9");
+    expect(handlers.onToast).toHaveBeenCalledWith("Reset to the original documents. Save Changes to keep it.");
+    expect(resetButton().disabled).toBe(true); // already the originals
+    fireEvent.click(saveButton());
+    expect(handlers.onSave).toHaveBeenCalledWith({ si: fields(), bl: fields({ containerCount: "9" }) });
   });
 
   it("falls back to the fields the automatic check named when the documents match", () => {
     mount(shipment({ status: "discrepancy", discrepancies: [{ field: "pol", label: "Port of Loading (POL)", si: "a", bl: "b", note: "" }] }));
-    toSideBySide();
-    expect(input(/Port of Loading/).className).toBe("bad");
+    expect(input(/POL/).className).toContain("bad");
     fireEvent.change(input(/Shipper/), { target: { value: "Edited" } });
-    expect(input(/Port of Loading/).className).toBe("");
+    expect(input(/POL/).className).not.toContain("bad");
   });
 
-  it("disables the form while saving", () => {
-    mount(shipment(), { saving: true });
-    toSideBySide();
+  it("disables editing while saving", () => {
+    const { rerender } = mount();
+    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
+    rerender(<ReviewModal shipment={shipment()} saving {...handlers} />);
     expect(input(/Shipper/).disabled).toBe(true);
-    expect((within(document.querySelector(".form-foot") as HTMLElement).getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it("shows one document at a time or both, and can hide the form", () => {
-    mount();
-    toSideBySide();
-    fireEvent.click(docBar().getByRole("button", { name: "Customer SI" }));
-    expect(document.querySelectorAll(".paper")).toHaveLength(1);
-    expect(document.querySelector(".paper.si")).not.toBeNull();
-    fireEvent.click(docBar().getByRole("button", { name: "Carrier Draft BL" }));
-    expect(document.querySelector(".paper.bl")).not.toBeNull();
-    fireEvent.click(docBar().getByRole("button", { name: "Side-by-Side" }));
-    expect(document.querySelectorAll(".paper")).toHaveLength(2);
-
-    fireEvent.click(button("Maximize Document Space"));
-    expect(document.querySelector(".form-pane")).toBeNull();
-    fireEvent.click(button("Show Edit Form"));
-    expect(document.querySelector(".form-pane")).not.toBeNull();
+    expect((within(document.querySelector(".doc-foot") as HTMLElement).getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(resetButton().disabled).toBe(true);
   });
 
   it("starts over when another email is shown", () => {
     const { rerender } = mount();
-    toSideBySide();
     fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
     rerender(<ReviewModal shipment={shipment({ id: "email_002", extractedFields: fields({ shipper: "Other" }) })} saving={false} {...handlers} />);
     expect(input(/Shipper/).value).toBe("Other");
-    expect(document.querySelector(".form-pane")).not.toBeNull(); // the pane stays open
+  });
+});
+
+describe("ReviewModal unsaved changes question", () => {
+  const question = () => screen.queryByRole("alertdialog", { name: "Discard unsaved changes?" });
+
+  it("asks before closing, and keeps the edits when told to", () => {
+    mount();
+    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(question()!.textContent).toContain("Your changes to the BL have not been saved.");
+    expect(handlers.onClose).not.toHaveBeenCalled();
+    fireEvent.click(button("Keep Editing"));
+    expect(question()).toBeNull();
+    expect(input(/Shipper/).value).toBe("Typo");
+
+    fireEvent.click(button("Close"));
+    fireEvent.keyDown(document.body, { key: "Escape" }); // Escape answers Keep Editing, it does not close the review
+    expect(question()).toBeNull();
+    expect(handlers.onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(button("Close"));
+    fireEvent.click(button("Discard Changes"));
+    expect(handlers.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before stepping to another email", () => {
+    mount();
+    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
+    fireEvent.change(input(/Shipper/, "si"), { target: { value: "Typo" } });
+    fireEvent.click(button("Next email"));
+    expect(question()!.textContent).toContain("Your changes to the SI and BL have not been saved.");
+    fireEvent.keyDown(document.body, { key: "ArrowLeft" }); // the arrow keys wait for the answer
+    expect(handlers.onNext).not.toHaveBeenCalled();
+    expect(handlers.onPrev).not.toHaveBeenCalled();
+    fireEvent.click(button("Discard Changes"));
+    expect(handlers.onNext).toHaveBeenCalledTimes(1);
+    expect(question()).toBeNull();
+  });
+
+  it("does not ask once the edits are undone", () => {
+    mount();
+    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
+    fireEvent.change(input(/Shipper/), { target: { value: "Meridian Textiles Sdn Bhd" } });
+    fireEvent.click(button("Previous email"));
+    expect(question()).toBeNull();
+    expect(handlers.onPrev).toHaveBeenCalled();
   });
 });
 
@@ -261,18 +275,8 @@ describe("ReviewModal closing and stepping", () => {
     fireEvent.keyDown(document.body, { key: "ArrowLeft" });
     expect(handlers.onNext).toHaveBeenCalledTimes(1);
     expect(handlers.onPrev).toHaveBeenCalledTimes(1);
-    toSideBySide();
     fireEvent.keyDown(input(/Shipper/), { key: "ArrowRight" });
     expect(handlers.onNext).toHaveBeenCalledTimes(1);
-  });
-
-  it("warns that stepping discards unsaved edits", () => {
-    mount();
-    toSideBySide();
-    fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
-    fireEvent.click(button("Previous email"));
-    expect(handlers.onToast).toHaveBeenCalledWith("Discarded unsaved BL edits");
-    expect(handlers.onPrev).toHaveBeenCalled();
   });
 
   it("disables stepping past the ends of the list", () => {
