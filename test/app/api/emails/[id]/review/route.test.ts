@@ -23,21 +23,16 @@ describe("POST /api/emails/[id]/review", () => {
     expect(dynamic).toBe("force-dynamic");
   });
 
-  it("saves the BL side by default", async () => {
-    const res = await post({ fields: fields() });
+  it("saves the SI and BL together", async () => {
+    const res = await post({ si: fields(), bl: fields({ shipper: "X" }) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: "email_001" });
-    expect(save).toHaveBeenCalledWith("DanielHo", "email_001", fields(), "bl");
-  });
-
-  it("saves the SI side when asked", async () => {
-    await post({ fields: fields(), side: "si" });
-    expect(save).toHaveBeenCalledWith("DanielHo", "email_001", fields(), "si");
+    expect(save).toHaveBeenCalledWith("DanielHo", "email_001", { si: fields(), bl: fields({ shipper: "X" }) });
   });
 
   it("refuses an auditor, who is read-only", async () => {
     vi.mocked(currentModerator).mockResolvedValue({ id: "AuditAnn", name: "Audit Ann", role: "auditor" });
-    const res = await post({ fields: fields() });
+    const res = await post({ si: fields(), bl: fields() });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Auditors have read-only access" });
     expect(save).not.toHaveBeenCalled();
@@ -45,13 +40,13 @@ describe("POST /api/emails/[id]/review", () => {
 
   it("refuses without a valid session", async () => {
     vi.mocked(currentModerator).mockResolvedValue(null);
-    const res = await post({ fields: fields() });
+    const res = await post({ si: fields(), bl: fields() });
     expect([res.status, await error(res)]).toEqual([401, "Log in to continue"]);
     expect(save).not.toHaveBeenCalled();
   });
 
   it("rejects a bad id", async () => {
-    const res = await post({ fields: fields() }, "a.b");
+    const res = await post({ si: fields(), bl: fields() }, "a.b");
     expect([res.status, await error(res)]).toEqual([400, "Invalid email id"]);
   });
 
@@ -60,40 +55,38 @@ describe("POST /api/emails/[id]/review", () => {
     expect([res.status, await error(res)]).toEqual([400, "Body must be JSON"]);
   });
 
-  it("rejects an unknown side", async () => {
-    const res = await post({ fields: fields(), side: "both" });
-    expect([res.status, await error(res)]).toEqual([400, 'side must be "si" or "bl"']);
-  });
-
-  it("rejects fields that are not an object", async () => {
+  it("rejects a document that is missing or not an object", async () => {
     for (const bad of [undefined, null, "x", [1]]) {
-      const res = await post({ fields: bad });
-      expect([res.status, await error(res)]).toEqual([400, "fields must be an object"]);
+      const res = await post({ si: fields(), bl: bad });
+      expect([res.status, await error(res)]).toEqual([400, "bl must be an object"]);
     }
+    const res = await post({ bl: fields() });
+    expect([res.status, await error(res)]).toEqual([400, "si must be an object"]);
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("requires exactly the seven fields as strings of at most 500 characters", async () => {
     const { shipper: _, ...six } = fields();
     for (const bad of [six, { ...fields(), extra: "x" }, { ...fields(), containerCount: 3 }, { ...fields(), shipper: "x".repeat(501) }]) {
-      const res = await post({ fields: bad });
+      const res = await post({ si: bad, bl: fields() });
       expect(res.status).toBe(400);
-      expect(await error(res)).toBe("fields must contain exactly: shipper, consignee, notifyParty, pol, pod, containerCount, grossWeightKg (strings, max 500 chars)");
+      expect(await error(res)).toBe("si must contain exactly: shipper, consignee, notifyParty, pol, pod, containerCount, grossWeightKg (strings, max 500 chars)");
     }
     expect(save).not.toHaveBeenCalled();
-    expect((await post({ fields: { ...fields(), shipper: "x".repeat(500) } })).status).toBe(200);
+    expect((await post({ si: fields(), bl: { ...fields(), shipper: "x".repeat(500) } })).status).toBe(200);
   });
 
   it("passes on not-found and conflict messages", async () => {
     for (const status of [404, 409]) {
       save.mockRejectedValueOnce(Object.assign(new Error(`status ${status}`), { status }));
-      const res = await post({ fields: fields() });
+      const res = await post({ si: fields(), bl: fields() });
       expect([res.status, await error(res)]).toEqual([status, `status ${status}`]);
     }
   });
 
   it("hides other errors behind a generic 502", async () => {
     save.mockRejectedValue(new Error("Firestore 500: secret detail"));
-    const res = await post({ fields: fields() });
+    const res = await post({ si: fields(), bl: fields() });
     expect([res.status, await error(res)]).toEqual([502, "Could not save review. Please try again."]);
   });
 });

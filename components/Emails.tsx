@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { paginate } from "@/lib/pagination";
 import { legColor, legKey, portName, voyageLegs } from "@/lib/ports";
-import { CATS, dayKey, fmtDate, fmtTime, voyageKey, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { CATS, dayKey, fmtDate, fmtTime, voyageKey, type Category, type Edits, type Shipment } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
 import ExportEmails from "./ExportEmails";
@@ -124,21 +124,21 @@ export default function Emails({ voyage }: { voyage?: string }) {
   const go = (i: number) => () => setOpenId(rows[i].id);
 
   // Server runs the deterministic 7-field comparison and returns the updated shipment.
-  // Without `fields` it marks the email as read, or with `clear` validates a flagged email that has no comparison.
-  const save = async (s: Shipment, side?: Side, fields?: Fields, clear?: boolean) => {
+  // Saves the SI and BL together; without `edits` it marks the email as read, or with `clear` validates a flagged email that has no comparison.
+  const save = async (s: Shipment, edits?: Edits, clear?: boolean) => {
     if (busy.current) return;
     busy.current = true;
     setSaving(true);
     try {
-      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${clear ? "clear" : fields ? "review" : "read"}`, {
+      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${clear ? "clear" : edits ? "review" : "read"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ side, fields }),
+        body: JSON.stringify(edits ?? {}),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
       const updated: Shipment = await res.json();
       setShipments((all) => all.map((x) => (x.id === s.id ? updated : x)));
-      showToast(clear ? `Cleared ${s.id}` : fields ? `Saved verified ${side!.toUpperCase()} fields for ${s.id}` : `Marked ${s.id} as read`);
+      showToast(clear ? `Cleared ${s.id}` : edits ? `Saved verified SI and BL fields for ${s.id}` : `Marked ${s.id} as read`);
     } catch (e) {
       showToast(`Save failed: ${(e as Error).message}`);
     } finally {
@@ -337,9 +337,9 @@ export default function Emails({ voyage }: { voyage?: string }) {
           shipment={selected}
           onClose={() => setOpenId(null)}
           saving={saving}
-          onSave={(side, fields) => save(selected, side, fields)}
+          onSave={(edits) => save(selected, edits)}
           onMarkRead={() => save(selected)}
-          onClear={() => save(selected, undefined, undefined, true)}
+          onClear={() => save(selected, undefined, true)}
           onToast={showToast}
           readOnly={me.role !== "moderator"}
           onPrev={at > 0 ? go(at - 1) : undefined}

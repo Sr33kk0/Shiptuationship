@@ -2,7 +2,7 @@
 // Never import this from a client component.
 import type { AuditEvent } from "./audit";
 import type { Role } from "./session";
-import { FIELDS, FIRESTORE_KEYS, mismatches, parseVoyage, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
+import { FIELDS, FIRESTORE_KEYS, mismatches, parseVoyage, type Category, type Edits, type FieldKey, type Fields, type Shipment, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -113,6 +113,9 @@ function toFields(map: unknown): Fields | null {
   return Object.fromEntries(FIELDS.map((f) => [f.key, str(m[FIRESTORE_KEYS[f.key]])])) as Fields;
 }
 
+// "si+bl" (how a review records which documents it changed) → "SI & BL"
+const sidesLabel = (v: unknown) => str(v).toUpperCase().replace("+", " & ");
+
 const fmtTime = (iso: unknown) => (iso ? new Date(String(iso)).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "");
 
 export function toShipment(doc: Doc): Shipment {
@@ -176,7 +179,7 @@ export function toShipment(doc: Doc): Shipment {
   if (reviewReasons.length) trail.push({ at: str((doc.last_ingestion_error as Doc | undefined)?.occurred_at ?? comparison.performed_at ?? doc.classified_at), action: `Human review required: ${reviewReasons.join(' ')}` });
   if (review?.reviewed_at) {
     const who = str(review.reviewed_by) || "unknown reviewer";
-    const edited = review.edited_side ? `${str(review.edited_side).toUpperCase()} edited, ` : "";
+    const edited = review.edited_side ? `${sidesLabel(review.edited_side)} edited, ` : "";
     trail.push({ at: str(review.reviewed_at), action: doc.classification === "Document-Comparison Request" ? `Manual verification saved by ${who} (${edited}${status === "clean" ? "all matched & cleared" : "override flagged"})` : `Cleared by ${who}` });
   }
   if (read?.marked_at) trail.push({ at: str(read.marked_at), action: `Marked as read by ${str(read.marked_by) || "unknown reviewer"}` });
@@ -207,6 +210,8 @@ export function toShipment(doc: Doc): Shipment {
     blRef: str((doc.bl_source as Doc | undefined)?.filename) || undefined,
     extractedFields: toFields(review?.fields) ?? toFields(doc.bl),
     referenceFields: toFields(review?.si_fields) ?? toFields(doc.si),
+    originalExtractedFields: toFields(doc.bl),
+    originalReferenceFields: toFields(doc.si),
     discrepancies,
     auditTrail: trail.map((t) => ({ time: fmtTime(t.at), action: t.action })),
   };
@@ -290,9 +295,12 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
       bot: false,
       emailId,
       subject: subject.get(emailId) ?? "",
-      detail: str(a.edited_side).toUpperCase(),
+      detail: sidesLabel(a.edited_side),
       outcome: review ? ((a.after as Doc | undefined)?.status === "cleared" ? "cleared" : "flagged") : "",
-      changes: Object.entries((a.changes as Record<string, Doc> | undefined) ?? {}).map(([k, c]) => ({ field: label[k] ?? k, before: str(c.before), after: str(c.after) })),
+      // `changes` is { si: { field: {before, after} }, bl: {...} }; reviews saved before SI and BL were saved together have one flat side
+      changes: Object.entries((a.changes as Record<string, Doc> | undefined) ?? {}).flatMap(([k, c]) =>
+        "after" in c ? [{ field: label[k] ?? k, before: str(c.before), after: str(c.after) }]
+          : Object.entries(c as Record<string, Doc>).map(([f, d]) => ({ field: `${k.toUpperCase()} ${label[f] ?? f}`, before: str(d.before), after: str(d.after) }))),
     });
   }
   return events.sort((a, b) => b.at.localeCompare(a.at));
@@ -350,47 +358,48 @@ async function commitAction(snapshot: Snapshot, updates: Doc, mask: string[], ti
   }
 }
 
-// Edits never touch the `si` / `bl` maps the n8n workflow writes; they are stored as overrides under `review`.
-// `review.fields` is the BL override (the name predates SI editing, so existing reviews keep working);
-// `review.si_fields` is the SI override. Without `fields` the call marks the email as read instead.
+// Edits never touch the `si` / `bl` maps the n8n workflow writes (they stay the originals); they are stored as overrides under `review`.
+// `review.fields` is the BL override (the name predates SI editing, so existing reviews keep working); `review.si_fields` is the SI override.
+// A review saves both documents together. Without `edits` the call marks the email as read instead.
 // `moderator` is the logged-in moderator's document id, which the action is attributed to.
-export async function saveModeratorAction(moderator: string, id: string, fields?: Fields, side: Side = "bl"): Promise<Shipment> {
+export async function saveModeratorAction(moderator: string, id: string, edits?: Edits): Promise<Shipment> {
   const { snapshot, before } = await loadEmail(id);
   const current = toShipment(before);
-  if (!fields && current.isRead) return current;
-  if (fields && (current.category !== "document-comparison" || !current.referenceFields || !current.extractedFields)) {
+  if (!edits && current.isRead) return current;
+  if (edits && (current.category !== "document-comparison" || !current.referenceFields || !current.extractedFields)) {
     throw actionError("Shipping Instruction and Draft BL must both be extracted before editing", 409);
   }
-  const saved = side === "si" ? current.referenceFields : current.extractedFields; // the side being edited
-  const other = side === "si" ? current.extractedFields : current.referenceFields; // the side it is compared against
-  const different = fields ? mismatches(fields, other!) : [];
+  const saved = { si: current.referenceFields!, bl: current.extractedFields! };
+  const different = edits ? mismatches(edits.si, edits.bl) : [];
   const blockers = ingestionReasons(before);
-  const reviewReasons = fields ? [...blockers, ...different.map(key => `${FIELDS.find(f => f.key === key)!.label} differs between SI and BL after manual verification.`)] : [];
+  const reviewReasons = edits ? [...blockers, ...different.map(key => `${FIELDS.find(f => f.key === key)!.label} differs between SI and BL after manual verification.`)] : [];
   const flagged = reviewReasons.length > 0;
-  const reviewKey = side === "si" ? "si_fields" : "fields";
-  const updates: Doc = fields ? {
-    review: { reviewed_by: moderator, edited_side: side, [reviewKey]: Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], fields[f.key]])) },
+  // What changed on each document, e.g. { bl: { container_count: { before: "4", after: "3" } } }; a document with no changes is left out.
+  const changes: Doc = edits ? Object.fromEntries((["si", "bl"] as const).flatMap((side) => {
+    const changed = FIELDS.filter((f) => saved[side][f.key] !== edits[side][f.key]);
+    return changed.length ? [[side, Object.fromEntries(changed.map((f) => [FIRESTORE_KEYS[f.key], { before: saved[side][f.key], after: edits[side][f.key] }]))]] : [];
+  })) : {};
+  const editedSide = Object.keys(changes).join("+"); // "si", "bl", "si+bl", or "" when saved unchanged
+  const toFs = (f: Fields) => Object.fromEntries(FIELDS.map((x) => [FIRESTORE_KEYS[x.key], f[x.key]]));
+  const updates: Doc = edits ? {
+    review: { reviewed_by: moderator, edited_side: editedSide, fields: toFs(edits.bl), si_fields: toFs(edits.si) },
     status: blockers.length ? "needs_review" : flagged ? "flagged" : "cleared",
     human_review_required: flagged,
     human_review_reasons: reviewReasons,
   } : { read_status: { is_read: true, marked_by: moderator } };
-  // Nested paths for `review`, so saving one side keeps the other side's override.
-  const mask = fields ? ["review.reviewed_by", "review.edited_side", `review.${reviewKey}`, "status", "human_review_required", "human_review_reasons"] : Object.keys(updates);
-  const timeField = fields ? "review.reviewed_at" : "read_status.marked_at";
-  const changes: Doc = fields ? Object.fromEntries(FIELDS
-    .filter((f) => saved?.[f.key] !== fields[f.key])
-    .map((f) => [FIRESTORE_KEYS[f.key], { before: saved?.[f.key] ?? null, after: fields[f.key] }])) : {};
+  const mask = edits ? ["review.reviewed_by", "review.edited_side", "review.fields", "review.si_fields", "status", "human_review_required", "human_review_reasons"] : Object.keys(updates);
+  const timeField = edits ? "review.reviewed_at" : "read_status.marked_at";
   const at = await commitAction(snapshot, updates, mask, timeField, {
     moderator_id: moderator,
-    action: fields ? "review_saved" : "marked_read",
-    edited_side: fields ? side : null,
+    action: edits ? "review_saved" : "marked_read",
+    edited_side: edits ? editedSide : null,
     changes,
-    before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null, human_review_reasons: before.human_review_reasons ?? [] } : { read_status: before.read_status ?? null },
+    before: edits ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null, human_review_reasons: before.human_review_reasons ?? [] } : { read_status: before.read_status ?? null },
   });
-  const map = updates[fields ? "review" : "read_status"] as Doc;
-  map[fields ? "reviewed_at" : "marked_at"] = at;
-  // Mirror the nested mask: the untouched side's override under `review` survives the save.
-  const review = fields ? { ...((before.review as Doc | undefined) ?? {}), ...(updates.review as Doc) } : before.review;
+  const map = updates[edits ? "review" : "read_status"] as Doc;
+  map[edits ? "reviewed_at" : "marked_at"] = at;
+  // Mirror the nested mask: any other keys under `review` survive the save.
+  const review = edits ? { ...((before.review as Doc | undefined) ?? {}), ...(updates.review as Doc) } : before.review;
   return toShipment({ ...before, ...updates, review });
 }
 
