@@ -1,5 +1,5 @@
 // Shared (client-safe) shape of one entry in the audit log. Built on the server in lib/firestore.ts from Firestore data only.
-export type AuditKind = "classified" | "compared" | "review_saved" | "marked_read";
+export type AuditKind = "classified" | "compared" | "review_saved" | "cleared" | "marked_read";
 
 export interface AuditEvent {
   id: string;
@@ -18,6 +18,7 @@ export const KINDS: Record<AuditKind, { label: string; color: string; icon: "doc
   classified: { label: "Classified", color: "#7e22ce", icon: "filter" },
   compared: { label: "Auto-comparison", color: "#1d4ed8", icon: "search" },
   review_saved: { label: "Review saved", color: "#059669", icon: "check" },
+  cleared: { label: "Cleared", color: "#0d9488", icon: "check" },
   marked_read: { label: "Marked read", color: "#d97706", icon: "doc" },
 };
 
@@ -27,6 +28,6 @@ export const BOT_NAME = "Ship AI";
 // The two logs: what people did, and what the automation did on its own. Each has its own page and its own action filter.
 export type AuditSource = "user" | "system";
 export const SOURCES: Record<AuditSource, { title: string; blurb: string; kinds: AuditKind[] }> = {
-  user: { title: "User Log", blurb: "Actions taken by moderators, newest first.", kinds: ["review_saved", "marked_read"] },
+  user: { title: "User Log", blurb: "Actions taken by moderators, newest first.", kinds: ["review_saved", "cleared", "marked_read"] },
   system: { title: "System Log", blurb: "What Ship AI did automatically, newest first.", kinds: ["classified", "compared"] },
 };

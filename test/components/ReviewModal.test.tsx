@@ -9,13 +9,13 @@ import ReviewModal from "@/components/ReviewModal";
 vi.mock("@/lib/printEmail", () => ({ printEmail: vi.fn() }));
 
 type Props = ComponentProps<typeof ReviewModal>;
-type Handlers = { [K in "onClose" | "onSave" | "onMarkRead" | "onToast"]: Mock<Props[K]> } & { onPrev?: Mock<() => void>; onNext?: Mock<() => void> };
+type Handlers = { [K in "onClose" | "onSave" | "onMarkRead" | "onClear" | "onToast"]: Mock<Props[K]> } & { onPrev?: Mock<() => void>; onNext?: Mock<() => void> };
 
 let reduced = true;
 let handlers: Handlers;
 beforeEach(() => {
   reduced = true;
-  handlers = { onClose: vi.fn(), onSave: vi.fn(), onMarkRead: vi.fn(), onToast: vi.fn(), onPrev: vi.fn(), onNext: vi.fn() };
+  handlers = { onClose: vi.fn(), onSave: vi.fn(), onMarkRead: vi.fn(), onClear: vi.fn(), onToast: vi.fn(), onPrev: vi.fn(), onNext: vi.fn() };
   vi.spyOn(window, "matchMedia").mockImplementation(() => ({ matches: reduced }) as MediaQueryList);
 });
 afterEach(() => {
@@ -220,6 +220,19 @@ describe("ReviewModal plain email", () => {
     expect(screen.queryByRole("button", { name: "Side-by-Side Review" })).toBeNull();
     fireEvent.click(button("Mark as Read"));
     expect(handlers.onMarkRead).toHaveBeenCalled();
+  });
+
+  it("offers Clear & Validate only on a flagged email without a comparison", () => {
+    const flagged = { ...plain, status: "discrepancy" as const, reviewReasons: ["Email classification failed: timeout"] };
+    const { rerender } = mount(flagged);
+    fireEvent.click(button("Clear & Validate"));
+    expect(handlers.onClear).toHaveBeenCalled();
+    rerender(<ReviewModal shipment={flagged} saving {...handlers} />);
+    expect((button("Clear & Validate") as HTMLButtonElement).disabled).toBe(true);
+    for (const [s, readOnly] of [[plain, false], [{ ...flagged, referenceFields: null, category: "document-comparison" }, false], [flagged, true]] as const) {
+      rerender(<ReviewModal shipment={s} saving={false} readOnly={readOnly} {...handlers} />);
+      expect(screen.queryByRole("button", { name: "Clear & Validate" })).toBeNull();
+    }
   });
 
   it("treats a comparison email without both documents as plain", () => {

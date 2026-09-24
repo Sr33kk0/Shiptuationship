@@ -43,6 +43,7 @@ function verb(e: AuditEvent) {
   if (e.kind === "classified") return <>classified <b className="ev-id">{e.emailId}</b> as <b>{e.detail || "Unknown"}</b></>;
   if (e.kind === "compared") return <>ran the SI / BL comparison on <b className="ev-id">{e.emailId}</b></>;
   if (e.kind === "review_saved") return <>saved verified {e.detail ? `${e.detail} ` : ""}fields on <b className="ev-id">{e.emailId}</b></>;
+  if (e.kind === "cleared") return <>cleared <b className="ev-id">{e.emailId}</b> after review</>;
   return <>marked <b className="ev-id">{e.emailId}</b> as read</>;
 }
 

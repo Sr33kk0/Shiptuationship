@@ -310,6 +310,7 @@ describe("listAuditLog", () => {
       at(":runQuery", [
         activity("email_001", "a1", { moderator_id: "DanielHo", action: "review_saved", edited_side: "bl", occurred_at: "2026-03-05T05:00:00Z", after: { status: "cleared" }, changes: { container_count: { before: "3", after: "4" }, extra: { before: null, after: "x" } } }),
         activity("email%2F2", "a2", { moderator_id: "Ghost", action: "marked_read", occurred_at: "2026-03-05T06:00:00Z" }),
+        activity("email%2F2", "a4", { moderator_id: "DanielHo", action: "cleared", occurred_at: "2026-03-05T07:00:00Z" }),
         activity("email_001", "a3", { action: "review_saved", occurred_at: "2026-03-05T04:00:00Z", after: { status: "flagged" } }),
         { document: fsDoc("not/an/activity/path", {}) },
         { readTime: "2026-03-05T00:00:00Z" },
@@ -318,12 +319,13 @@ describe("listAuditLog", () => {
     const { listAuditLog } = await load();
     const events = await listAuditLog("user");
     expect(events.map((e) => [e.id, e.kind, e.actor, e.outcome])).toEqual([
+      ["email/2:a4", "cleared", "Daniel Ho", ""],
       ["email/2:a2", "marked_read", "Ghost", ""],
       ["email_001:a1", "review_saved", "Daniel Ho", "cleared"],
       ["email_001:a3", "review_saved", "Unknown", "flagged"],
     ]);
-    expect(events[0].subject).toBe("Second");
-    expect(events[1]).toMatchObject({ detail: "BL", bot: false, changes: [{ field: "Container Count", before: "3", after: "4" }, { field: "extra", before: "", after: "x" }] });
+    expect(events[1].subject).toBe("Second");
+    expect(events[2]).toMatchObject({ detail: "BL", bot: false, changes: [{ field: "Container Count", before: "3", after: "4" }, { field: "extra", before: "", after: "x" }] });
     const query = fetchMock.mock.calls.find(([u]) => String(u).endsWith(":runQuery"))!;
     expect(JSON.parse(String(query[1]!.body)).structuredQuery.from).toEqual([{ collectionId: "activity", allDescendants: true }]);
   });
@@ -483,5 +485,46 @@ describe("saveModeratorAction", () => {
     save(email({}), { commit: () => new Response("nope", { status: 500 }) });
     const { saveModeratorAction } = await load();
     await expect(saveModeratorAction("DanielHo", "email_001")).rejects.toMatchObject({ status: 500, message: "Firestore 500: nope" });
+  });
+});
+
+describe("clearEmail", () => {
+  const invoice = (data: Record<string, unknown>) => fsDoc(DOC, { email_id: "email_001", classification: "Invoice Queries", status: "needs_review", human_review_required: true, human_review_reasons: ["Check the amount"], classification_error: "timeout", ...data });
+  const fromFs = (f: Record<string, any>) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, Object.values(v)[0]]));
+  function clear(doc: unknown) {
+    const writes: Record<string, any>[] = [];
+    const fetchMock = mockFetch(at("/emails/email_001", doc), (url, init) => {
+      if (!url.pathname.endsWith(":commit")) return;
+      writes.push(...JSON.parse(String(init.body)).writes);
+      return json({ writeResults: [{ transformResults: [{ timestampValue: "2026-03-21T08:00:00Z" }] }, {}] });
+    });
+    return { writes, fetchMock };
+  }
+
+  it("clears a flagged email, resolves its ingestion problems and records what was flagged", async () => {
+    const { writes } = clear(invoice({ review: { note: "kept" } }));
+    const { clearEmail } = await load();
+    const s = await clearEmail("DanielHo", "email_001");
+    expect(s).toMatchObject({ status: "clean", reviewReasons: [], reviewedBy: "DanielHo", reviewedAt: "2026-03-21T08:00:00Z" });
+    expect(s.auditTrail.at(-1)!.action).toBe("Cleared by DanielHo");
+    expect(writes[0].updateMask.fieldPaths).toEqual(["review.reviewed_by", "status", "human_review_required", "human_review_reasons", "missing_attachments_warning", "classification_error", "last_ingestion_error"]);
+    expect(writes[0].updateTransforms).toEqual([{ fieldPath: "review.reviewed_at", setToServerValue: "REQUEST_TIME" }]);
+    expect(fromFs(writes[0].update.fields)).toMatchObject({ status: "cleared", human_review_required: false, classification_error: null });
+    const activity = writes[1].update.fields;
+    expect(activity.action).toEqual({ stringValue: "cleared" });
+    expect(fromFs(activity.before.mapValue.fields)).toMatchObject({ status: "needs_review", human_review_required: true, classification_error: "timeout", last_ingestion_error: null });
+  });
+
+  it("leaves an email that needs no review alone", async () => {
+    const { fetchMock } = clear(invoice({ status: "", human_review_required: false, human_review_reasons: [], classification_error: null }));
+    const { clearEmail } = await load();
+    expect((await clearEmail("DanielHo", "email_001")).status).toBe("pending");
+    expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith(":commit"))).toBe(false);
+  });
+
+  it("refuses a comparison email, which is cleared by saving its fields", async () => {
+    clear(invoice({ classification: "Document-Comparison Request" }));
+    const { clearEmail } = await load();
+    await expect(clearEmail("DanielHo", "email_001")).rejects.toMatchObject({ status: 409, message: "Comparison emails are cleared by saving verified fields" });
   });
 });

@@ -118,15 +118,16 @@ interface Props {
   onClose: () => void;
   onSave: (side: Side, fields: Fields) => void;
   onMarkRead: () => void;
+  onClear: () => void; // validates a flagged email that has no SI / BL comparison
   onToast: (msg: string) => void;
-  readOnly?: boolean; // auditors: no edit form, Mark as Read or AI Reply (proxy.ts refuses them anyway)
+  readOnly?: boolean; // auditors: no edit form, Mark as Read, Clear & Validate or AI Reply (proxy.ts refuses them anyway)
   onPrev?: () => void; // undefined = no earlier email in the list
   onNext?: () => void;
 }
 
 const actionTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "medium" }) + " MYT";
 
-export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onToast, readOnly, onPrev, onNext }: Props) {
+export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMarkRead, onClear, onToast, readOnly, onPrev, onNext }: Props) {
   const isCmp = s.category === "document-comparison" && !!s.referenceFields && !!s.extractedFields;
   const [side, setSide] = useState<Side>("bl"); // which document the form edits
   const [form, setForm] = useState<Fields>(s.extractedFields ?? ({} as Fields));
@@ -447,6 +448,12 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                   <button className="btn dark lg" disabled={saving || s.isRead} onClick={onMarkRead}>
                     {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
                   </button>
+                  {s.category !== "document-comparison" && s.status === "discrepancy" && (
+                    <button className="btn dark lg" disabled={saving} onClick={onClear}>
+                      <Icon d="check" size={16} sw={2.2} />
+                      Clear &amp; Validate
+                    </button>
+                  )}
                 </>
               )}
             </div>

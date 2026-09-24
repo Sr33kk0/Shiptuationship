@@ -129,6 +129,7 @@ describe("AuditLog", () => {
     expect(actions).toEqual([
       ["All actions2", "/audit/user?user=Daniel+Ho"],
       ["Review saved2", "/audit/user?action=review_saved&user=Daniel+Ho"],
+      ["Cleared0", "/audit/user?action=cleared&user=Daniel+Ho"],
       ["Marked read0", "/audit/user?action=marked_read&user=Daniel+Ho"],
     ]);
     fireEvent.keyDown(document, { key: "Escape" });
