@@ -58,7 +58,7 @@ function Paper({ kind, refNo, values, bad, onChange, disabled }: { kind: Side; r
           {cell("pod", "5. POD", " port")}
         </div>
         <div className="paper-row">
-          {cell("containerCount", "6. Container Count", " num", "x 40HC")}
+          {cell("containerCount", "6. Container Count", " num")}
           {cell("grossWeightKg", "7. Gross Weight", " num", "kg")}
         </div>
       </div>
@@ -147,7 +147,7 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
   const [reply, setReply] = useState<Reply | null>(null);
   const [generating, setGenerating] = useState(false);
   const replyRequest = useRef<AbortController>(null);
-  const [reasonsOpen, setReasonsOpen] = useState(true); // phones only: the review reasons can be folded away (the button is hidden, and the fold ignored, on desktop)
+  const [reasonsOpen, setReasonsOpen] = useState(true); // the review reasons can be folded away
   // Stepping to another email keeps the modal (and the chosen pane) open; only the edits belong to one email, so they restart here.
   const [shownId, setShownId] = useState(s.id);
   if (shownId !== s.id) {

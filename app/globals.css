@@ -406,16 +406,13 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .review-reasons svg { flex-shrink: 0; margin-top: 2px; }
 .review-reasons ul { margin: 6px 0 0; padding-inline-start: 20px; overflow-wrap: anywhere; }
 .review-reasons li + li { margin-top: 4px; }
-.rr-toggle { display: none; }
-@media (max-width: 900px) {
-  /* phones: the reasons fold away behind a chevron, so the form and documents get the screen */
-  .banner.review-reasons { flex-wrap: nowrap; align-items: flex-start; }
-  .review-reasons > div { flex: 1; }
-  .rr-toggle { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; margin: -6px -8px -6px 0; border-radius: 8px; }
-  .rr-toggle svg { transition: transform 0.2s; transform: rotate(180deg); }
-  .review-reasons.collapsed .rr-toggle svg { transform: none; }
-  .review-reasons.collapsed ul { display: none; }
-}
+/* the reasons fold away behind a chevron, so the documents get the screen */
+.banner.review-reasons { flex-wrap: nowrap; align-items: flex-start; }
+.review-reasons > div { flex: 1; }
+.rr-toggle { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; margin: -6px -8px -6px 0; border-radius: 8px; }
+.rr-toggle svg { transition: transform 0.2s; transform: rotate(180deg); }
+.review-reasons.collapsed .rr-toggle svg { transform: none; }
+.review-reasons.collapsed ul { display: none; }
 @media (prefers-reduced-motion: reduce) { .rr-toggle svg { transition: none; } }
 
 .cmp { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
