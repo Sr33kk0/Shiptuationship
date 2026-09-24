@@ -189,13 +189,51 @@ describe("ingestion-drain Code nodes", () => {
   });
 });
 
+describe("ingestion review alert", () => {
+  const w = workflows.ingestion;
+  const s = (stringValue: string) => ({ stringValue });
+  const doc = (fields: Record<string, unknown>) => ({ json: { name: "emails/e1", fields } });
+
+  it("runs after Write Comparison, sends to Telegram and Discord, and never fails ingestion", () => {
+    expect(w.connections["Write Comparison"].main[0]!.map((t) => t.node)).toEqual(["Build Review Alert"]);
+    expect(w.connections["Build Review Alert"].main[0]!.map((t) => t.node)).toEqual(["Send Review Alert", "Send Discord Review Alert"]);
+    for (const name of ["Send Review Alert", "Send Discord Review Alert"]) expect(w.nodes.find((n) => n.name === name)).toMatchObject({ onError: "continueRegularOutput" });
+  });
+
+  it("Build Review Alert sends one message per email that needs review", async () => {
+    const run = codeNode("ingestion", "Build Review Alert");
+    expect(await run(doc({ human_review_required: { booleanValue: false } }))).toEqual([]);
+    expect(await run(doc({}))).toEqual([]);
+
+    const flagged = doc({
+      human_review_required: { booleanValue: true }, from: s("Ops <ops@x.com>"), subject: s("@everyone SI check"), classification: s("Document-Comparison Request"),
+      human_review_reasons: { arrayValue: { values: [s("Shipper: Values differ")] } },
+    });
+    const out = await run([flagged, flagged]); // Write Comparison emits one item per attachment
+    expect(out).toHaveLength(1);
+    expect(out[0].json.text.split("\n")).toEqual([
+      "⚠️ Email needs human review",
+      "From: Ops <ops@​x.com>",
+      "Subject: @​everyone SI check",
+      "Category: Document-Comparison Request",
+      "• Shipper: Values differ",
+      "",
+      "https://shiptuationship.vercel.app/emails",
+    ]);
+
+    const [long] = await run(doc({ human_review_required: { booleanValue: true }, human_review_reasons: { arrayValue: { values: [s("x".repeat(3000))] } } }));
+    expect(long.json.text).toHaveLength(1900);
+  });
+});
+
 describe("daily-report workflow", () => {
   const node = (type: string) => workflows["daily-report"].nodes.find((n) => n.type.endsWith(type))!;
 
-  it("fires every day at 8am Kuala Lumpur time and sends plain text to Telegram", () => {
-    expect(node(".scheduleTrigger").parameters.rule.interval).toEqual([{ field: "days", triggerAtHour: 8 }]);
+  it("fires every day at 8am Kuala Lumpur time and sends Markdown to Telegram", () => {
+    const [rule] = node(".scheduleTrigger").parameters.rule.interval;
+    expect({ field: "days", ...rule }).toEqual({ field: "days", triggerAtHour: 8 }); // n8n omits field when it is the default, days
     expect((workflows["daily-report"] as unknown as { settings: { timezone: string } }).settings.timezone).toBe("Asia/Kuala_Lumpur");
-    expect(node(".telegram").parameters).toMatchObject({ text: "={{ $json.text }}", additionalFields: { appendAttribution: false } });
+    expect(node(".telegram").parameters).toMatchObject({ text: "={{ $json.text }}", additionalFields: { appendAttribution: false, parse_mode: "Markdown" } });
   });
 
   it("Build Report counts the last 24 hours and the open backlog in a fixed format", async () => {
@@ -215,29 +253,28 @@ describe("daily-report workflow", () => {
     ];
     const run = codeNode("daily-report", "Build Report");
     const [{ json }] = await run(emails, { "Failed Ingestion": { json: { result: { aggregateFields: { failed: { integerValue: "2" } } } } } });
-    expect(json.text.split("\n").filter((_: string, i: number) => i !== 1)).toEqual([
-      "Shiptuationship daily report",
+    const date = new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Kuala_Lumpur" });
+    expect(json.text.split("\n")).toEqual([
+      `[Shiptuationship Daily Report (${date})](https://shiptuationship.vercel.app/dashboard)`,
       "",
-      "Last 24 hours",
-      "New emails: 5",
+      "🕗 In the last 24 hours,",
+      "📩 New Emails: 5",
       "• SI BL Comparison: 3",
       "• SI Request: 0",
       "• Invoice: 1",
       "• General: 0",
       "• Spam: 1",
-      "Comparisons cleared: 1",
-      "Sent to human review: 4",
+      "Comparisons Cleared: 1",
+      "Sent to Human Review: 4",
       "",
-      "Open now",
-      "Needs human review: 5",
-      "Unread: 5",
-      "Failed ingestion: 2",
-      "",
-      "https://shiptuationship.vercel.app/dashboard",
+      "🌐 To Take Action:",
+      "• Needs Human Review: 5",
+      "• Unread: 5",
+      "• Failed Ingestion: 2",
     ]);
 
     const [{ json: empty }] = await run([{ json: { readTime: "t" } }], { "Failed Ingestion": { json: { result: { aggregateFields: {} } } } });
-    expect(empty.text).toContain("New emails: 0");
-    expect(empty.text).toContain("Failed ingestion: 0");
+    expect(empty.text).toContain("New Emails: 0");
+    expect(empty.text).toContain("Failed Ingestion: 0");
   });
 });
