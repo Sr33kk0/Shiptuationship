@@ -188,3 +188,56 @@ describe("ingestion-drain Code nodes", () => {
     expect(unknown.json.firestore_document.fields.last_error).toEqual({ stringValue: "ingestion failed" });
   });
 });
+
+describe("daily-report workflow", () => {
+  const node = (type: string) => workflows["daily-report"].nodes.find((n) => n.type.endsWith(type))!;
+
+  it("fires every day at 8am Kuala Lumpur time and sends plain text to Telegram", () => {
+    expect(node(".scheduleTrigger").parameters.rule.interval).toEqual([{ field: "days", triggerAtHour: 8 }]);
+    expect((workflows["daily-report"] as unknown as { settings: { timezone: string } }).settings.timezone).toBe("Asia/Kuala_Lumpur");
+    expect(node(".telegram").parameters).toMatchObject({ text: "={{ $json.text }}", additionalFields: { appendAttribution: false } });
+  });
+
+  it("Build Report counts the last 24 hours and the open backlog in a fixed format", async () => {
+    const hoursAgo = (h: number) => ({ timestampValue: new Date(Date.now() - h * 3_600_000).toISOString() });
+    const doc = (fields: Record<string, unknown>) => ({ json: { document: { name: "e", fields } } });
+    const s = (stringValue: string) => ({ stringValue });
+    const read = { mapValue: { fields: { is_read: { booleanValue: true } } } };
+    const files = { arrayValue: { values: [s("si.pdf"), s("bl.pdf")] } };
+    const emails = [
+      doc({ classification: s("Document-Comparison Request"), classified_at: hoursAgo(1), status: s("cleared"), attachments: files, read_status: read }),
+      doc({ classification: s("Document-Comparison Request"), classified_at: hoursAgo(2), status: s("flagged"), attachments: files }),
+      doc({ classification: s("Document-Comparison Request"), classified_at: hoursAgo(3), status: s("pending") }), // no attachments
+      doc({ classification: s("Invoice Queries"), classified_at: hoursAgo(4), last_ingestion_error: { mapValue: { fields: {} } } }),
+      doc({ classification: s("Other"), classified_at: hoursAgo(5), status: s("needs_review"), classification_error: s("bad") }),
+      doc({ classification: s("New SI Request"), classified_at: hoursAgo(30), human_review_required: { booleanValue: true } }),
+      doc({ classification: s("General Messages"), classified_at: hoursAgo(48), read_status: read }),
+    ];
+    const run = codeNode("daily-report", "Build Report");
+    const [{ json }] = await run(emails, { "Failed Ingestion": { json: { result: { aggregateFields: { failed: { integerValue: "2" } } } } } });
+    expect(json.text.split("\n").filter((_: string, i: number) => i !== 1)).toEqual([
+      "Shiptuationship daily report",
+      "",
+      "Last 24 hours",
+      "New emails: 5",
+      "• SI BL Comparison: 3",
+      "• SI Request: 0",
+      "• Invoice: 1",
+      "• General: 0",
+      "• Spam: 1",
+      "Comparisons cleared: 1",
+      "Sent to human review: 4",
+      "",
+      "Open now",
+      "Needs human review: 5",
+      "Unread: 5",
+      "Failed ingestion: 2",
+      "",
+      "https://shiptuationship.vercel.app/dashboard",
+    ]);
+
+    const [{ json: empty }] = await run([{ json: { readTime: "t" } }], { "Failed Ingestion": { json: { result: { aggregateFields: {} } } } });
+    expect(empty.text).toContain("New emails: 0");
+    expect(empty.text).toContain("Failed ingestion: 0");
+  });
+});

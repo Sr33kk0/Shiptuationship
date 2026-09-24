@@ -192,7 +192,7 @@ Shiptuationship has **two halves** that share one database:
 | Log in | `/api/session` checks a scrypt password hash on the `moderators` document, then sets a signed HttpOnly cookie that Next.js **`proxy.ts`** verifies | Keeps logged-out visitors on the front page and off the data API, keeps auditors read-only, and attributes every action to the moderator who logged in |
 | Database | **Google Cloud Firestore** via its **REST API** | Single source of truth |
 | Auth to Firestore | **Google OAuth2 refresh token** (same model as the n8n credential) | No service account, no Firebase SDK |
-| Automation | **n8n** (5 exported workflows in [`n8n/`](n8n)) | Gmail intake, ingestion, orchestration, comparison, auto-reply |
+| Automation | **n8n** (6 exported workflows in [`n8n/`](n8n)) | Gmail intake, ingestion, orchestration, comparison, auto-reply, daily Telegram report |
 | AI | **Google Vertex AI**, model **`gemini-3.5-flash-lite`** | Classification, field extraction and auto-reply drafting |
 | OCR | **Google Cloud Vision API** | Text from scanned pages and image-only PDFs |
 | File storage | **Google Drive** | Dataset: `/inbox` emails and `/attachments` SI/BL files |
@@ -299,7 +299,7 @@ We added a dedicated **`Check Port Code`** step to the n8n `ingestion` workflow,
 
 ### 5.1 Ingestion workflows (n8n)
 
-Five workflows are exported in [`n8n/`](n8n):
+Six workflows are exported in [`n8n/`](n8n):
 
 | Workflow | Role | Memory per execution |
 |----------|------|----------------------|
@@ -308,6 +308,7 @@ Five workflows are exported in [`n8n/`](n8n):
 | **`ingestion-drain`** | Schedule (1 min). Exits if another drain is still running, re-queues rows stuck in `processing`, reads ≤ 20 `queued` rows and loops them **one at a time**: claim → `ingestion` → mark `done` / `failed` | ≤ 20 sub-results, one email in flight |
 | **`ingestion`** | The actual pipeline for one email (45 nodes) | one email |
 | **`auto-reply`** | Webhook, on demand. Called from `/api/auto-reply` with an email and its comparison result, drafts a reply with Gemini and returns it | one reply |
+| **`daily-report`** | Schedule, every day at **8:00 (Asia/Kuala_Lumpur)**. Reads Firestore and sends a fixed-format summary to Telegram: the last 24 hours (new emails per category, comparisons cleared, sent to human review) and what is open now (needs human review, unread, failed ingestion rows). Plain counting in a Code node, **no LLM**, and "needs review" follows the same rules as the dashboard | one message |
 
 **How fast is it?** Measured on the n8n execution log, one `ingestion` run takes **about 4 s** for an email that only needs classifying (new SI request, invoice query, general, spam) and **about 20 s** for a document-comparison request, which also downloads, parses and extracts both attachments and runs the comparison. Every stage is visible per execution in n8n, so a slow or failed email is easy to find.
 
@@ -596,14 +597,15 @@ Type-check only: `npx tsc --noEmit`
 
 ### 10.5 Set up the ingestion pipeline (n8n)
 
-1. **Import** the five files from [`n8n/`](n8n): `gmail-ship-to-drive.json`, `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`, and `auto-reply.json`.
+1. **Import** the six files from [`n8n/`](n8n): `gmail-ship-to-drive.json`, `ingestion.json`, `ingestion-trigger.json`, `ingestion-drain.json`, `auto-reply.json`, and `daily-report.json`.
 2. **Create credentials** in n8n:
 
    | Credential | Used by |
    |------------|---------|
    | Gmail OAuth2 | `gmail-ship-to-drive` (read `+ship`-tagged mail) |
    | Google Drive OAuth2 | `gmail-ship-to-drive` (upload manifest + attachments), `ingestion-trigger` (list files), `ingestion` (download email and attachments) |
-   | Google Cloud Firestore OAuth2 | `ingestion-trigger`, `ingestion-drain`, `ingestion` |
+   | Google Cloud Firestore OAuth2 | `ingestion-trigger`, `ingestion-drain`, `ingestion`, `daily-report` |
+   | Telegram API (bot token from [@BotFather](https://t.me/BotFather)) | `daily-report` |
    | Google Service Account with Vertex AI access | `ingestion` and `auto-reply` LLM nodes (`gemini-3.5-flash-lite`) |
 
 3. In `ingestion-drain`, open the **Ingest Email** node and **re-select the `ingestion` workflow** (the export does not carry the workflow id).
@@ -613,6 +615,7 @@ Type-check only: `npx tsc --noEmit`
 7. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL` and restart the web app.
 8. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
 9. Drop email JSON files into the Drive `/inbox` folder, by hand or via `gmail-ship-to-drive`. Within a minute or two they appear in Firestore, then in the app. The auto-reply workflow runs only when a moderator clicks **Generate auto reply**.
+10. **Optional — daily Telegram report:** create a bot with [@BotFather](https://t.me/BotFather) and add its token as a Telegram credential in n8n. Send the bot a message (or add it to a group), then open `https://api.telegram.org/bot<token>/getUpdates` and copy `message.chat.id`. In `daily-report`, select the credential on **Send Report**, replace `YOUR_TELEGRAM_CHAT_ID` with that id, click **Execute workflow** once to check the message arrives, then activate it. To change the send time, edit **Daily 8am** and the workflow timezone (**Settings → Timezone**) together with the `TZ` constant in **Build Report**, which only labels the date.
 
 **Self-hosted n8n (Docker) tuning**, recommended for large PDF/XLSX files:
 
@@ -647,7 +650,7 @@ Shiptuationship
 │  ├─ audit.ts · theme.ts      Log types (and the "Ship AI" bot name) and colour scheme registry
 │  └─ ports.ts · top.ts · …    Port → country mapping, top-N, hooks
 ├─ proxy.ts                    Session gate: app pages and /api/* need a valid session
-├─ n8n/                        gmail-ship-to-drive.json · ingestion.json · ingestion-trigger.json · ingestion-drain.json · auto-reply.json
+├─ n8n/                        gmail-ship-to-drive.json · ingestion.json · ingestion-trigger.json · ingestion-drain.json · auto-reply.json · daily-report.json
 ├─ public/shiplogo.svg         Logo (vectorised)
 ├─ public/opengraph.png        Link preview image (1200×630)
 ├─ .env.example                Environment template
