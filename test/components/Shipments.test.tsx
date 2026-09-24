@@ -31,9 +31,9 @@ describe("Shipments", () => {
   it("groups emails by vessel and voyage, latest activity first, skipping emails without a voyage", () => {
     state(emails);
     render(<Shipments />);
-    expect(names()).toEqual(["NAP 914Voyage BS007", "LE HAVREVoyage QI540A", "NAP 914Voyage BS008"]);
+    expect(names()).toEqual(["NAP 914Vessel BS007", "LE HAVREVessel QI540A", "NAP 914Vessel BS008"]);
     const [first] = document.querySelectorAll(".ship");
-    expect(first.querySelector(".ship-meta")!.textContent).toMatch(/^2 emails/);
+    expect(first.querySelector(".ship-meta")!.textContent).toMatch(/^2 emails · 1 route/); // the discrepancy's comparison isn't validated, so its ports don't count
     expect(first.querySelector(".status")!.textContent).toBe("1 Needs Review");
     expect(first.getAttribute("href")).toBe("/shipments?voyage=NAP%20914%20V.BS007");
   });
@@ -50,7 +50,7 @@ describe("Shipments", () => {
     state(emails);
     render(<Shipments />);
     fireEvent.change(screen.getByLabelText("Search shipments"), { target: { value: "qi540" } });
-    expect(names()).toEqual(["LE HAVREVoyage QI540A"]);
+    expect(names()).toEqual(["LE HAVREVessel QI540A"]);
     fireEvent.change(screen.getByLabelText("Search shipments"), { target: { value: "zzz" } });
     expect(screen.getByText("No shipments match your search.")).toBeTruthy();
   });
