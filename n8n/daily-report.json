@@ -1,0 +1,207 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -400,
+        -240
+      ],
+      "id": "adaca88e-530c-4e98-8ee0-93f9fca2a68e",
+      "name": "Daily 8am"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents:runAggregationQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"structuredAggregationQuery\":{\"structuredQuery\":{\"from\":[{\"collectionId\":\"ingestion_queue\"}],\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"status\"},\"op\":\"EQUAL\",\"value\":{\"stringValue\":\"failed\"}}}},\"aggregations\":[{\"alias\":\"failed\",\"count\":{}}]}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        -240
+      ],
+      "id": "0c23b09d-06f3-4299-b838-b1efcd4fe678",
+      "name": "Failed Ingestion",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "9M9xrqadnihDTg6Z",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "Count of ingestion_queue rows left in failed. Runs first: one item out, so Emails runs once."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://firestore.googleapis.com/v1/projects/hokkien/databases/(default)/documents:runQuery",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleFirebaseCloudFirestoreOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"emails\"}],\"select\":{\"fields\":[{\"fieldPath\":\"classification\"},{\"fieldPath\":\"classified_at\"},{\"fieldPath\":\"status\"},{\"fieldPath\":\"human_review_required\"},{\"fieldPath\":\"read_status.is_read\"},{\"fieldPath\":\"attachments\"},{\"fieldPath\":\"missing_attachments_warning\"},{\"fieldPath\":\"classification_error\"},{\"fieldPath\":\"last_ingestion_error\"}]}}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        -240
+      ],
+      "id": "13e8a830-1b3a-419e-8ef1-ebaa5fd9dacc",
+      "name": "Emails",
+      "notesInFlow": true,
+      "credentials": {
+        "googleFirebaseCloudFirestoreOAuth2Api": {
+          "id": "9M9xrqadnihDTg6Z",
+          "name": "Google Firebase Cloud Firestore account"
+        }
+      },
+      "notes": "Every email, only the fields the report counts (no bodies)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fixed-format daily report, no LLM. \"Needs review\" mirrors toShipment() in lib/firestore.ts,\n// so the numbers match the web app's dashboard: change both together.\nconst TZ = 'Asia/Kuala_Lumpur'; // same as the workflow's timezone setting, which fires the 8am trigger\nconst LABELS = { 'Document-Comparison Request': 'SI BL Comparison', 'New SI Request': 'SI Request', 'Invoice Queries': 'Invoice', 'General Messages': 'General', Spam: 'Spam' };\nconst val = f => f?.stringValue ?? f?.timestampValue ?? f?.booleanValue;\nconst label = f => LABELS[val(f.classification)] ?? 'Spam'; // same fallback as the app\nconst needsReview = f =>\n  !!val(f.missing_attachments_warning) || !!val(f.classification_error) || !!f.last_ingestion_error?.mapValue ||\n  (!f.attachments?.arrayValue?.values?.length && val(f.classification) === 'Document-Comparison Request') ||\n  val(f.human_review_required) === true || ['flagged', 'needs_review', 'incomplete'].includes(val(f.status));\nconst count = (list, test) => list.filter(test).length;\n\n// runQuery returns one item per document (a bare {readTime} when there are none).\nconst emails = $input.all().filter(i => i.json.document).map(i => i.json.document.fields ?? {});\nconst since = Date.now() - 24 * 60 * 60 * 1000;\nconst recent = emails.filter(f => Date.parse(val(f.classified_at)) >= since);\nconst failed = Number($('Failed Ingestion').first().json.result?.aggregateFields?.failed?.integerValue ?? 0);\n\nconst text = [\n  'Shiptuationship daily report',\n  new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: TZ }),\n  '',\n  'Last 24 hours',\n  `New emails: ${recent.length}`,\n  ...Object.values(LABELS).map(l => `• ${l}: ${count(recent, f => label(f) === l)}`),\n  `Comparisons cleared: ${count(recent, f => val(f.status) === 'cleared' && !needsReview(f))}`,\n  `Sent to human review: ${count(recent, needsReview)}`,\n  '',\n  'Open now',\n  `Needs human review: ${count(emails, needsReview)}`,\n  `Unread: ${count(emails, f => f.read_status?.mapValue?.fields?.is_read?.booleanValue !== true)}`,\n  `Failed ingestion: ${failed}`,\n  '',\n  'https://shiptuationship.vercel.app/dashboard',\n].join('\\n');\nreturn [{ json: { text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -240
+      ],
+      "id": "55b69116-018f-46c8-86f7-261c9ebc9233",
+      "name": "Build Report"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        816,
+        -368
+      ],
+      "id": "0e5f5e79-5671-49dc-9f0a-307c697736e2",
+      "name": "Send Report",
+      "notesInFlow": true,
+      "webhookId": "79b1bf5b-344c-4a91-9435-ca7a8bd3280a",
+      "notes": "Select your Telegram bot credential and set Chat ID."
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1470056103554449431",
+          "mode": "list",
+          "cachedResultName": "Myself",
+          "cachedResultUrl": "https://discord.com/channels/1470056103554449431"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1552606234769629234",
+          "mode": "list",
+          "cachedResultName": "shiptuationship",
+          "cachedResultUrl": "https://discord.com/channels/1470056103554449431/1552606234769629234"
+        },
+        "content": "={{ $json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -128
+      ],
+      "id": "dc8b131a-7368-4f8e-b6a3-7a59eb4fae24",
+      "name": "Send Discord Report",
+      "webhookId": "40d8d37e-af43-457a-8a28-ab88201cb3e2",
+      "credentials": {
+        "discordBotApi": {
+          "id": "2AnZIvLsQ1xgRPbA",
+          "name": "Discord Bot account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 8am": {
+      "main": [
+        [
+          {
+            "node": "Failed Ingestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failed Ingestion": {
+      "main": [
+        [
+          {
+            "node": "Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Discord Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "0fe95da9ee7d901179ecf30910c80a03a5e73b67df586a2ed180c1fbd58a5c97"
+  }
+}
