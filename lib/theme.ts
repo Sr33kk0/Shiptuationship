@@ -42,7 +42,7 @@ export function useTheme(): ThemeId {
 }
 
 // GUI scale: globals.css zooms the whole page by --ui-scale, so every size grows together. 1 is the default.
-export const SCALES = [0.9, 1, 1.1, 1.25, 1.5] as const;
+export const SCALES = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 export const SCALE_KEY = "shiptuationship-scale";
 
 const currentScale = () => Number(document.documentElement.style.getPropertyValue("--ui-scale")) || 1;
