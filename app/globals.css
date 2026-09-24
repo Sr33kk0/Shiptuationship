@@ -760,6 +760,28 @@ a.chip svg:last-child { color: var(--faint); }
 .ev-embed dd { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--faint); }
 .ev-embed del { padding: 0 6px; border-radius: 4px; color: #be123c; background: #fff1f2; }
 .ev-embed ins { padding: 0 6px; border-radius: 4px; color: #047857; background: #ecfdf5; text-decoration: none; }
+/* system entries: source documents, then each compared field from the document's value to the normalised one */
+.ev-facts { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; }
+.ev-facts > div { display: contents; }
+.ev-facts dt { font-weight: 600; color: var(--muted); }
+.ev-facts dd { margin: 0; display: block; color: var(--text-2); overflow-wrap: anywhere; }
+.ev-facts a { color: var(--blue); }
+.ev-cmp-wrap { overflow-x: auto; }
+.ev-cmp { min-width: 560px; font-size: 12px; line-height: 16px; }
+.ev-cmp th, .ev-cmp td { padding: 6px 12px 6px 0; white-space: normal; vertical-align: top; background: none; }
+.ev-cmp thead { position: static; background: none; box-shadow: none; }
+/* undo the Emails table's row styling (height, pointer, hover, entry animation) */
+.ev-cmp tbody tr:nth-child(n) { height: auto; border-top: 0; cursor: default; background: none; animation: none; }
+.ev-cmp thead th { padding-top: 0; font-size: 10px; line-height: 14px; color: var(--faint); }
+.ev-cmp th:hover { background: none; }
+.ev-cmp tbody th { font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 700; color: var(--ink); }
+.ev-cmp tbody { border-top: 1px solid var(--edge); }
+.ev-cmp tbody tr + tr td { padding-top: 0; }
+.ev-cmp td { color: var(--text-2); overflow-wrap: anywhere; }
+.ev-cmp td.ev-side { font-weight: 700; color: var(--muted); }
+.ev-cmp .status { white-space: nowrap; }
+.ev-note { display: block; margin-top: 2px; font-size: 11px; line-height: 14px; color: var(--muted); }
+.ev-note[data-warn] { color: var(--rose); }
 /* "Filter by ..." dropdowns for the audit logs */
 .dd-row { display: flex; flex-wrap: wrap; gap: 10px; position: relative; }
 .dd { position: relative; min-width: 0; }

@@ -1,6 +1,6 @@
 // Server-only: Firestore REST access with a Google OAuth2 refresh token (same model as the n8n credential).
 // Never import this from a client component.
-import type { AuditEvent } from "./audit";
+import type { AuditEvent, ComparedField } from "./audit";
 import type { Role } from "./session";
 import { FIELDS, FIRESTORE_KEYS, mismatches, parseVoyage, type Category, type Edits, type FieldKey, type Fields, type Shipment, type Status } from "./shipments";
 
@@ -116,7 +116,44 @@ function toFields(map: unknown): Fields | null {
 // "si+bl" (how a review records which documents it changed) → "SI & BL"
 const sidesLabel = (v: unknown) => str(v).toUpperCase().replace("+", " & ");
 
-const fmtTime = (iso: unknown) => (iso ? new Date(String(iso)).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "");
+// The Google Drive link of a source map (`si_source` / `bl_source`); "" when it has none.
+function driveLink(src: Doc | undefined): string {
+  const id = str(src?.drive_file_id);
+  const link = str(src?.drive_link) || (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : "");
+  return link.startsWith("https://drive.google.com/") ? link : "";
+}
+
+// What the auto-comparison saw on one email: the source documents, anything that blocked it, and each field on each document
+// from the value read off the document (before the port check rewrote it) to the value it compared.
+function comparisonDetail(doc: Doc): Pick<AuditEvent, "facts" | "fields"> {
+  const facts = (["si", "bl"] as const).map((side) => {
+    const src = doc[`${side}_source`] as Doc | undefined;
+    return { label: `${side.toUpperCase()} document`, value: str(src?.filename) || (doc[side] ? "Unnamed file" : "Not extracted"), href: driveLink(src) || undefined };
+  });
+  facts.push(...ingestionReasons(doc).map((value) => ({ label: "Blocked", value, href: undefined })));
+  const compared = ((doc.comparison as Doc | undefined)?.fields as Record<string, Doc> | undefined) ?? {};
+  const fields = FIELDS.flatMap((f): ComparedField[] => {
+    const key = FIRESTORE_KEYS[f.key];
+    const c = compared[key];
+    if (!c) return [];
+    const side = (s: "si" | "bl") => {
+      const port = key.startsWith("port_of_") ? (doc[`${s}_port_validation`] as Record<string, Doc> | undefined)?.[key] : undefined;
+      const checked = port?.status === "valid" || port?.status === "added";
+      return {
+        document: str(port ? port.original : (doc[s] as Doc | undefined)?.[key]),
+        // a checked port is compared as the name the port check gave it; anything else as Compare Fields normalised it
+        normalized: checked ? str(port.normalized) : str(c[`${s}_normalized`]),
+        note: !key.startsWith("port_of_") ? "" : checked ? `UN/LOCODE ${str(port.code)} ${port.status === "added" ? "added" : "confirmed"}` : str(port?.reason) || "Port was not validated.",
+        ok: !key.startsWith("port_of_") || checked,
+      };
+    };
+    const result = c.match !== true ? "mismatch" : c.discrepancy_type === "formatting" ? "formatting" : "match";
+    return [{ field: f.label, result, si: side("si"), bl: side("bl") }];
+  });
+  return { facts, fields };
+}
+
+const fmtTime = (iso: unknown) =>(iso ? new Date(String(iso)).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "");
 
 export function toShipment(doc: Doc): Shipment {
   const from = str(doc.from);
@@ -153,9 +190,8 @@ export function toShipment(doc: Doc): Shipment {
   // n8n stores a Drive link on each of the two source maps it extracts from (`si_source`, `bl_source`); other attachments have only a name.
   const attachmentLinks: Record<string, string> = {};
   for (const src of [doc.si_source, doc.bl_source] as (Doc | undefined)[]) {
-    const id = str(src?.drive_file_id);
-    const link = str(src?.drive_link) || (id ? `https://drive.google.com/file/d/${encodeURIComponent(id)}/view` : "");
-    if (str(src?.filename) && link.startsWith("https://drive.google.com/")) attachmentLinks[str(src?.filename)] = link;
+    const link = driveLink(src);
+    if (str(src?.filename) && link) attachmentLinks[str(src?.filename)] = link;
   }
   const blockers = ingestionReasons(doc);
   const status = blockers.length || doc.human_review_required === true ? "discrepancy" : STATUS[str(doc.status)] ?? "pending";
@@ -266,9 +302,13 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
     for (const e of emails) {
       const emailId = str(e.email_id);
       const base = { emailId, subject: str(e.subject), actor: "n8n Workflow", bot: true, outcome: "", changes: [] };
-      if (e.classified_at) events.push({ ...base, id: `${emailId}:classified`, at: str(e.classified_at), kind: "classified", detail: str(e.classification) });
+      if (e.classified_at) events.push({ ...base, id: `${emailId}:classified`, at: str(e.classified_at), kind: "classified", detail: str(e.classification), facts: [
+        { label: "From", value: str(e.from) },
+        { label: "Attachments", value: ((e.attachments as string[] | undefined) ?? []).join(", ") || "None" },
+        ...(e.classification_error ? [{ label: "Classifier error", value: str(e.classification_error) }] : []),
+      ] });
       const cmp = e.comparison as Doc | undefined;
-      if (cmp?.performed_at) events.push({ ...base, id: `${emailId}:compared`, at: str(cmp.performed_at), kind: "compared", detail: str(cmp.status) });
+      if (cmp?.performed_at) events.push({ ...base, id: `${emailId}:compared`, at: str(cmp.performed_at), kind: "compared", detail: str(cmp.status), ...comparisonDetail(e) });
     }
     return events.sort((a, b) => b.at.localeCompare(a.at));
   }

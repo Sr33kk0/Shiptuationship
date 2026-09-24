@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { BOT_NAME, KINDS, SOURCES, type AuditEvent, type AuditSource } from "@/lib/audit";
+import { BOT_NAME, KINDS, SOURCES, type AuditEvent, type AuditSource, type ComparedField } from "@/lib/audit";
 import { paginate } from "@/lib/pagination";
 import FilterMenu, { type FilterOption } from "./FilterMenu";
 import { Icon } from "./Icon";
@@ -38,6 +38,51 @@ const OUTCOME: Record<string, { label: string; c: string; bg: string }> = {
   flagged: { label: "Needs review", c: "#be123c", bg: "#fff1f2" },
   incomplete: { label: "Incomplete", c: "#525252", bg: "#f5f5f5" },
 };
+
+const RESULT: Record<ComparedField["result"], { label: string; tone: string }> = {
+  match: { label: "Exact match", tone: "green" },
+  formatting: { label: "Match after normalising", tone: "green" },
+  mismatch: { label: "Mismatch", tone: "rose" },
+};
+
+// What the toggle under an entry says, or "" when there is nothing to expand.
+function toggleLabel(e: AuditEvent) {
+  if (e.changes.length) return `${e.changes.length} field ${e.changes.length === 1 ? "change" : "changes"}`;
+  if (e.fields?.length) {
+    const off = e.fields.filter((f) => f.result === "mismatch").length;
+    return `${e.fields.length} fields compared${off ? `, ${off} mismatched` : ""}`;
+  }
+  return e.facts?.length ? "Details" : "";
+}
+
+// Each compared field on both documents: the value read off the document, then the value the comparison used.
+function Compared({ fields }: { fields: ComparedField[] }) {
+  return (
+    <div className="ev-cmp-wrap">
+      <table className="ev-cmp">
+        <thead>
+          <tr><th>Field</th><th>Doc</th><th>Original (document)</th><th>Normalised</th><th>Result</th></tr>
+        </thead>
+        {fields.map((f) => (
+          <tbody key={f.field}>
+            {(["si", "bl"] as const).map((s, i) => (
+              <tr key={s}>
+                {i === 0 && <th scope="rowgroup" rowSpan={2}>{f.field}</th>}
+                <td className="ev-side">{s.toUpperCase()}</td>
+                <td>{f[s].document || <span className="none">empty</span>}</td>
+                <td>
+                  {f[s].normalized || <span className="none">{f.result === "match" ? "identical" : "empty"}</span>}
+                  {f[s].note && <small className="ev-note" data-warn={!f[s].ok || undefined}>{f[s].note}</small>}
+                </td>
+                {i === 0 && <td rowSpan={2}><span className={`status ${RESULT[f.result].tone}`}>{RESULT[f.result].label}</span></td>}
+              </tr>
+            ))}
+          </tbody>
+        ))}
+      </table>
+    </div>
+  );
+}
 
 function verb(e: AuditEvent) {
   if (e.kind === "classified") return <>classified <b className="ev-id">{e.emailId}</b> as <b>{e.detail || "Unknown"}</b></>;
@@ -158,7 +203,7 @@ export default function AuditLog({ source }: { source: AuditSource }) {
               const divider = day !== lastDay ? ((lastDay = day), true) : false;
               const kind = KINDS[e.kind];
               const outcome = OUTCOME[e.kind === "review_saved" ? e.outcome : e.kind === "compared" ? e.detail : ""];
-              const expandable = e.changes.length > 0;
+              const expandable = toggleLabel(e);
               const expanded = open.has(e.id);
               return (
                 <li key={e.id} className="ev-item" style={{ "--d": `${Math.min(i, 14) * 0.03}s` } as React.CSSProperties}>
@@ -184,10 +229,25 @@ export default function AuditLog({ source }: { source: AuditSource }) {
                       {expandable && (
                         <button className="ev-toggle" onClick={() => toggle(e.id)} aria-expanded={expanded}>
                           <Icon d={expanded ? "chevD" : "chevR"} size={12} sw={2.4} />
-                          {e.changes.length} field {e.changes.length === 1 ? "change" : "changes"}
+                          {expandable}
                         </button>
                       )}
-                      {expandable && expanded && (
+                      {expanded && !e.changes.length && (
+                        <div className="ev-embed" style={{ "--k": kind.color } as React.CSSProperties}>
+                          {!!e.facts?.length && (
+                            <dl className="ev-facts">
+                              {e.facts.map((f, j) => (
+                                <div key={j}>
+                                  <dt>{f.label}</dt>
+                                  <dd>{f.href ? <a href={f.href} target="_blank" rel="noreferrer">{f.value}</a> : f.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          )}
+                          {!!e.fields?.length && <Compared fields={e.fields} />}
+                        </div>
+                      )}
+                      {expanded && !!e.changes.length && (
                         <dl className="ev-embed" style={{ "--k": kind.color } as React.CSSProperties}>
                           {e.changes.map((c) => (
                             <div key={c.field}>
