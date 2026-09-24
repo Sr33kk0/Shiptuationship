@@ -144,7 +144,7 @@ Shiptuationship has **two halves** that share one database:
 | **Front page and login** | A product-style front page at which is always light, sections fade in as you scroll where the browser supports it. **Log in** checks your username and password against the `moderators` collection in Firestore and opens `/dashboard`. There is no sign-up: moderators and read-only auditors are added by hand (see [10.4](#104-getting-the-google-refresh-token-one-time)). Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page|
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, filter tabs (All / Comparisons / SI Requests / Invoices / General / Other, plus **Needs Review** and **Validated**), search, date-range picker, sortable columns. Every filter has its own URL (`/emails?view=needs-review`). Cards on phones and tablets. |
-| **Review screen** | For comparison emails: manifest fields form, **SI and Draft BL side by side** with the differing fields in red (only on the document being edited), an *Editing: Carrier Draft BL / Customer SI* switch, save with an automatic re-comparison and "Mark as read". A **Read Email** view swaps the comparison for the original email (the form hides so the email gets the whole window). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box. On phones the *Human review required* reasons fold away behind a chevron. |
+| **Review screen** | For comparison emails: the **SI and Draft BL side by side**, edited directly on the documents, with the differing fields in red on both. **Save Changes** (bottom right) saves both documents together with an automatic re-comparison; **Reset to Original** puts both back to what n8n extracted, before any human review (kept once saved). Closing the window or stepping to another email with unsaved edits asks first (*Keep Editing* / *Discard Changes*). Plus "Mark as read". A **Read Email** view swaps the comparison for the original email (edits are kept). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box. On phones the *Human review required* reasons fold away behind a chevron. |
 | **User Log** | A chronological audit feed of every **moderator action** (reviews saved, emails marked read), with before/after field changes you can expand. |
 | **System Log** | The same feed for everything the automation did (classified, auto-compared), shown as **Ship AI** with the Shiptuationship logo as its avatar. |
 | **Settings**  | Five colour schemes for the app: Light, Dark (true black), Ocean, Forest and Sunset. The front page ignores them and is always light. |
@@ -216,7 +216,7 @@ Shiptuationship has **two halves** that share one database:
 | `comparison` | n8n | `status`, `performed_at`, `discrepancies[]`, `formatting_notes[]`, and per-field `{ match, bl, si, discrepancy_type, severity, *_normalized }` |
 | `status` | n8n, web app | `pending` / `needs_review` / `incomplete` / `flagged` / `cleared` |
 | `human_review_required` | n8n, web app | `true` when a person must look at it |
-| `review` | **web app** | `reviewed_by`, `reviewed_at`, `edited_side`, and the override maps `fields` (BL) and `si_fields` (SI) |
+| `review` | **web app** | `reviewed_by`, `reviewed_at`, `edited_side` (which documents the last save changed: `si`, `bl` or `si+bl`), and the override maps `fields` (BL) and `si_fields` (SI) |
 | `read_status` | **web app** | `is_read`, `marked_by`, `marked_at` |
 
 </details>
@@ -226,7 +226,7 @@ Shiptuationship has **two halves** that share one database:
 
 | Path | Purpose |
 |------|---------|
-| `emails/{id}/activity/{eventId}` | Immutable audit record per moderator action: `moderator_id`, `action` (`review_saved` / `marked_read`), `edited_side`, `changes` (per-field before and after), `before`, `after`, `occurred_at` (server time). Feeds the **User Log** |
+| `emails/{id}/activity/{eventId}` | Immutable audit record per moderator action: `moderator_id`, `action` (`review_saved` / `marked_read`), `edited_side`, `changes` (per document, per field before and after: `{ si: { shipper: { before, after } }, bl: {…} }`; records from before SI and BL were saved together hold one flat side), `before`, `after`, `occurred_at` (server time). Feeds the **User Log** |
 | `moderators/{id}` | One per moderator or auditor, added by hand (no sign-up). The id is the handle actions are attributed to. `display_name`, `role` (`moderator`, or `auditor` for read-only; a missing or unknown role is read-only), `username` (lowercase, the log in name), `password_hash` (from `npm run hash-password`) |
 | `ingestion_queue/{createdTime}_{driveFileId}` | One row per Drive file: `file_id`, `name`, `created_time`, `status` (`queued → processing → done / failed`), `queued_at`, `claimed_at`, `finished_at`, `last_error` |
 
@@ -239,7 +239,7 @@ Shiptuationship has **two halves** that share one database:
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/api/emails` | `GET` | List emails, mapped to the shape the UI uses |
-| `/api/emails/{id}/review` | `POST` | Body `{ side: "si" \| "bl", fields }`: save a verified override for one side, re-run the comparison, log the activity |
+| `/api/emails/{id}/review` | `POST` | Body `{ si, bl }`: save verified overrides for both documents together, re-run the comparison, log the activity |
 | `/api/emails/{id}/read` | `POST` | Mark an email as read (idempotent) |
 | `/api/audit?source=user\|system` | `GET` | User Log (moderator activity) or System Log (n8n activity) |
 | `/api/session` | `POST` / `DELETE` | Log in with body `{ email, password }` (`204` and a session cookie, or `401 {"error":"Wrong email or password"}`), log out |
@@ -372,7 +372,7 @@ Port of Loading and Port of Discharge get their own validation step, separate fr
 The web app is where "ask for help" happens.
 
 - **Where the humans are pulled in:** the pipeline marks cases `flagged` (real discrepancy), `incomplete` (missing SI or BL) or `needs_review` (classification error), each with `human_review_required` where a person must act. `flagged` comparison emails appear in the **Emails** page under **Needs Review** (and on the dashboard's red **Pending Validation** button). Clean ones appear under **Validated**.
-- **Review screen:** the left pane holds the seven editable fields for **one document at a time** (switch *Carrier Draft BL* / *Customer SI*). The right pane shows the **SI and Draft BL as paper documents side by side**. Fields that differ are shown in **red text on the document being edited**, and the *Human review required* section at the top lists the reasons (it can be folded on phones). *Read Email* replaces the comparison with the original email and hides the form.
+- **Review screen:** the **SI and Draft BL are shown as paper documents side by side**, and each of their seven fields is edited in place. Fields that differ are shown in **red on both documents**. *Save Changes* saves the SI and BL together; *Reset to Original* returns both to the values n8n extracted, which the overrides never overwrite. The *Human review required* section at the top lists the reasons (it can be folded on phones). *Read Email* replaces the comparison with the original email.
 - **Save flow (`POST /api/emails/{id}/review`):**
   1. Load the email and refuse if there is no SI/BL pair to compare.
   2. Compare the edited side against the other side with the same seven-field rule. The result sets `status` to `flagged` or `cleared` and `human_review_required` accordingly.

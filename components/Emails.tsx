@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { paginate } from "@/lib/pagination";
-import { CATS, dayKey, fmtDate, fmtTime, type Category, type Fields, type Shipment, type Side } from "@/lib/shipments";
+import { CATS, dayKey, fmtDate, fmtTime, type Category, type Edits, type Shipment } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
 import DateRangePicker from "./DateRangePicker";
 import ExportEmails from "./ExportEmails";
@@ -113,21 +113,21 @@ export default function Emails() {
   const go = (i: number) => () => setOpenId(rows[i].id);
 
   // Server runs the deterministic 7-field comparison and returns the updated shipment.
-  // Without `fields` it marks the email as read instead.
-  const save = async (s: Shipment, side?: Side, fields?: Fields) => {
+  // Saves the SI and BL together; without `edits` it marks the email as read instead.
+  const save = async (s: Shipment, edits?: Edits) => {
     if (busy.current) return;
     busy.current = true;
     setSaving(true);
     try {
-      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${fields ? "review" : "read"}`, {
+      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${edits ? "review" : "read"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ side, fields }),
+        body: JSON.stringify(edits ?? {}),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
       const updated: Shipment = await res.json();
       setShipments((all) => all.map((x) => (x.id === s.id ? updated : x)));
-      showToast(fields ? `Saved verified ${side!.toUpperCase()} fields for ${s.id}` : `Marked ${s.id} as read`);
+      showToast(edits ? `Saved verified SI and BL fields for ${s.id}` : `Marked ${s.id} as read`);
     } catch (e) {
       showToast(`Save failed: ${(e as Error).message}`);
     } finally {
@@ -308,7 +308,7 @@ export default function Emails() {
           shipment={selected}
           onClose={() => setOpenId(null)}
           saving={saving}
-          onSave={(side, fields) => save(selected, side, fields)}
+          onSave={(edits) => save(selected, edits)}
           onMarkRead={() => save(selected)}
           onToast={showToast}
           readOnly={me.role !== "moderator"}

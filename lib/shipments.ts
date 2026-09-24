@@ -1,5 +1,6 @@
 export type Category = "document-comparison" | "new-si" | "invoice" | "general" | "spam";
-export type Side = "si" | "bl"; // which document a manual edit applies to
+export type Side = "si" | "bl"; // the customer SI or the carrier draft BL
+export type Edits = Record<Side, Fields>; // a review saves both documents together
 export type Status = "discrepancy" | "clean" | "pending";
 
 // The 7 manifest fields compared between the customer SI and the carrier's draft BL.
@@ -49,8 +50,10 @@ export interface Shipment {
   emailBody: string;
   siRef?: string;
   blRef?: string;
-  extractedFields: Fields | null;
-  referenceFields: Fields | null;
+  extractedFields: Fields | null; // the BL as last saved (a moderator override, else what n8n extracted)
+  referenceFields: Fields | null; // the SI, the same way
+  originalExtractedFields: Fields | null; // the BL exactly as n8n extracted it, before any human review
+  originalReferenceFields: Fields | null;
   discrepancies: { field: FieldKey; label: string; si: string; bl: string; note: string }[];
   auditTrail: { time: string; action: string }[];
 }

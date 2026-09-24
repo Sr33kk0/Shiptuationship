@@ -89,6 +89,8 @@ describe("toShipment", () => {
       emailBody: "Body",
       extractedFields: null,
       referenceFields: null,
+      originalExtractedFields: null,
+      originalReferenceFields: null,
     });
   });
 
@@ -177,6 +179,7 @@ describe("toShipment", () => {
     const s = toShipment({ bl, si: bl, review: { fields: { ...bl, shipper: "BL override" }, si_fields: { ...bl, shipper: "SI override" } } });
     expect(s.extractedFields?.shipper).toBe("BL override");
     expect(s.referenceFields?.shipper).toBe("SI override");
+    expect([s.originalExtractedFields?.shipper, s.originalReferenceFields?.shipper]).toEqual(["A", "A"]); // what n8n extracted, for Reset to Original
     expect(toShipment({ bl }).extractedFields).toEqual({
       shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100",
     });
@@ -190,14 +193,14 @@ describe("toShipment", () => {
       classified_at: "2026-03-05T01:00:00Z",
       status: "cleared",
       comparison: { performed_at: "2026-03-05T02:00:00Z", status: "cleared" },
-      review: { reviewed_at: "2026-03-05T04:00:00Z", reviewed_by: "DanielHo", edited_side: "si" },
+      review: { reviewed_at: "2026-03-05T04:00:00Z", reviewed_by: "DanielHo", edited_side: "si+bl" },
       read_status: { marked_at: "2026-03-05T03:00:00Z" },
     });
     expect(s.auditTrail.map((t) => t.action)).toEqual([
       "Classified as Document-Comparison Request",
       "Auto-comparison: cleared",
       "Marked as read by unknown reviewer",
-      "Manual verification saved by DanielHo (SI edited, all matched & cleared)",
+      "Manual verification saved by DanielHo (SI & BL edited, all matched & cleared)",
     ]);
     expect(s.auditTrail[0].time).toBe("5 Mar 2026, 01:00");
   });
@@ -293,7 +296,7 @@ describe("listAuditLog", () => {
       at(":runQuery", [
         activity("email_001", "a1", { moderator_id: "DanielHo", action: "review_saved", edited_side: "bl", occurred_at: "2026-03-05T05:00:00Z", after: { status: "cleared" }, changes: { container_count: { before: "3", after: "4" }, extra: { before: null, after: "x" } } }),
         activity("email%2F2", "a2", { moderator_id: "Ghost", action: "marked_read", occurred_at: "2026-03-05T06:00:00Z" }),
-        activity("email_001", "a3", { action: "review_saved", occurred_at: "2026-03-05T04:00:00Z", after: { status: "flagged" } }),
+        activity("email_001", "a3", { action: "review_saved", edited_side: "si+bl", occurred_at: "2026-03-05T04:00:00Z", after: { status: "flagged" }, changes: { si: { shipper: { before: "A", after: "B" } }, bl: { port_of_loading: { before: "X", after: "Y" } } } }),
         { document: fsDoc("not/an/activity/path", {}) },
         { readTime: "2026-03-05T00:00:00Z" },
       ]),
@@ -307,6 +310,7 @@ describe("listAuditLog", () => {
     ]);
     expect(events[0].subject).toBe("Second");
     expect(events[1]).toMatchObject({ detail: "BL", bot: false, changes: [{ field: "Container Count", before: "3", after: "4" }, { field: "extra", before: "", after: "x" }] });
+    expect(events[2]).toMatchObject({ detail: "SI & BL", changes: [{ field: "SI Shipper", before: "A", after: "B" }, { field: "BL Port of Loading (POL)", before: "X", after: "Y" }] });
     const query = fetchMock.mock.calls.find(([u]) => String(u).endsWith(":runQuery"))!;
     expect(JSON.parse(String(query[1]!.body)).structuredQuery.from).toEqual([{ collectionId: "activity", allDescendants: true }]);
   });
@@ -396,44 +400,44 @@ describe("saveModeratorAction", () => {
     expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith(":commit"))).toBe(false);
   });
 
-  it("saves matching BL fields as cleared and records what changed", async () => {
+  const input = { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" };
+
+  it("saves the SI and BL together as cleared and records what changed on each", async () => {
     const { writes } = save(email({ bl: { ...bl, shipper: "Old" } }));
     const { saveModeratorAction } = await load();
-    const input = { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" };
-    const s = await saveModeratorAction("DanielHo", "email_001", input);
-    expect(s).toMatchObject({ status: "clean", reviewedBy: "DanielHo", reviewedAt: "2026-03-21T08:00:00Z", extractedFields: input });
-    expect(writes[0].updateMask.fieldPaths).toEqual(["review.reviewed_by", "review.edited_side", "review.fields", "status", "human_review_required", "human_review_reasons"]);
+    const s = await saveModeratorAction("DanielHo", "email_001", { si: input, bl: input });
+    expect(s).toMatchObject({ status: "clean", reviewedBy: "DanielHo", reviewedAt: "2026-03-21T08:00:00Z", extractedFields: input, referenceFields: input });
+    expect(s.originalExtractedFields?.shipper).toBe("Old"); // the n8n original is never overwritten
+    expect(writes[0].updateMask.fieldPaths).toEqual(["review.reviewed_by", "review.edited_side", "review.fields", "review.si_fields", "status", "human_review_required", "human_review_reasons"]);
     expect(fromFs(writes[0].update.fields)).toMatchObject({ status: "cleared", human_review_required: false });
     const activity = writes[1].update.fields;
     expect(activity.action).toEqual({ stringValue: "review_saved" });
-    expect(Object.keys(activity.changes.mapValue.fields)).toEqual(["shipper"]);
+    expect(activity.edited_side).toEqual({ stringValue: "bl" }); // only the BL changed
+    expect(Object.keys(activity.changes.mapValue.fields)).toEqual(["bl"]);
+    expect(Object.keys(activity.changes.mapValue.fields.bl.mapValue.fields)).toEqual(["shipper"]);
   });
 
-  it("flags fields that still differ from the other document", async () => {
+  it("names both documents when both changed", async () => {
     const { writes } = save(email({}));
     const { saveModeratorAction } = await load();
-    const s = await saveModeratorAction("DanielHo", "email_001", { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "4", grossWeightKg: "100" });
+    await saveModeratorAction("DanielHo", "email_001", { si: { ...input, shipper: "S" }, bl: { ...input, shipper: "S" } });
+    expect(fromFs(writes[1].update.fields).edited_side).toBe("si+bl");
+    expect(Object.keys(writes[1].update.fields.changes.mapValue.fields)).toEqual(["si", "bl"]);
+  });
+
+  it("flags fields that still differ between the documents", async () => {
+    const { writes } = save(email({}));
+    const { saveModeratorAction } = await load();
+    const s = await saveModeratorAction("DanielHo", "email_001", { si: input, bl: { ...input, containerCount: "4" } });
     expect(s.status).toBe("discrepancy");
     expect(s.reviewReasons).toEqual(["Container Count differs between SI and BL after manual verification."]);
     expect(fromFs(writes[0].update.fields)).toMatchObject({ status: "flagged", human_review_required: true });
   });
 
-  it("saves the SI side separately and keeps an earlier BL override", async () => {
-    const override = { ...bl, shipper: "BL override" };
-    const { writes } = save(email({ review: { fields: override } }));
-    const { saveModeratorAction } = await load();
-    const input = { shipper: "BL override", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" };
-    const s = await saveModeratorAction("DanielHo", "email_001", input, "si");
-    expect(writes[0].updateMask.fieldPaths).toContain("review.si_fields");
-    expect(s.referenceFields?.shipper).toBe("BL override");
-    expect(s.extractedFields?.shipper).toBe("BL override");
-    expect(s.status).toBe("clean");
-  });
-
   it("keeps ingestion problems as needs_review", async () => {
     const { writes } = save(email({ classification_error: "timeout" }));
     const { saveModeratorAction } = await load();
-    const s = await saveModeratorAction("DanielHo", "email_001", { shipper: "A", consignee: "B", notifyParty: "C", pol: "SGSIN", pod: "NLRTM", containerCount: "3", grossWeightKg: "100" });
+    const s = await saveModeratorAction("DanielHo", "email_001", { si: input, bl: input });
     expect(fromFs(writes[0].update.fields).status).toBe("needs_review");
     expect(s.reviewReasons).toContain("Email classification failed: timeout");
   });

@@ -218,12 +218,13 @@ describe("Emails review", () => {
     vi.stubGlobal("fetch", fetchMock);
     mount();
     fireEvent.click(screen.getByText("Alpha SI"));
-    fireEvent.click(within(document.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Side-by-Side Review" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save BL Changes" })));
+    const shipper = within(screen.getByRole("group", { name: "Draft Bill of Lading" })).getByLabelText(/Shipper/);
+    fireEvent.change(shipper, { target: { value: "Edited" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save Changes" })));
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/emails/email_001/review");
-    expect(JSON.parse(String(init.body))).toEqual({ side: "bl", fields: rows[0].extractedFields });
-    expect(toast).toHaveBeenCalledWith("Saved verified BL fields for email_001");
+    expect(JSON.parse(String(init.body))).toEqual({ si: rows[0].referenceFields, bl: { ...rows[0].extractedFields, shipper: "Edited" } });
+    expect(toast).toHaveBeenCalledWith("Saved verified SI and BL fields for email_001");
   });
 
   it("reports a failed save", async () => {
