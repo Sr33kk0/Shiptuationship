@@ -36,8 +36,14 @@ const mount = (loadState: "loading" | "ready" | "error" = "ready", role: "modera
   return render(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho", role }}><Emails voyage={voyage} /></ModeratorProvider>);
 };
 const ids = () => [...document.querySelectorAll("tbody tr td.id")].map((td) => td.textContent);
-const tab = (name: RegExp) => within(document.querySelector(".filters") as HTMLElement).getByRole("link", { name });
-const sub = (name: RegExp) => within(document.querySelector(".substatus") as HTMLElement).getByRole("link", { name });
+// opens a filter dropdown (unless already open) and finds one of its options
+const option = (menu: string, name: RegExp) => {
+  if (!screen.queryByRole("menu", { name: menu })) fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${menu}`), expanded: false }));
+  return within(screen.getByRole("menu", { name: menu })).getByRole("menuitemradio", { name });
+};
+const tab = (name: RegExp) => option("Category", name);
+const sub = (name: RegExp) => option("Status", name);
+const seen = (name: RegExp) => option("Read/Unread", name);
 
 beforeEach(() => {
   query = "";
@@ -74,22 +80,23 @@ describe("Emails table", () => {
     expect(document.querySelectorAll("tbody tr")[3].querySelector(".stat")!.textContent).toBe("Validated");
   });
 
-  it("counts each tab and marks tabs with emails that need review", () => {
+  it("counts each filter option", () => {
     mount();
-    expect(tab(/^All/).textContent).toBe("All (4)");
-    expect(tab(/^Comparisons/).textContent).toBe("Comparisons (2)");
-    expect(tab(/^Spam/).textContent).toBe("Spam (1)");
-    expect(tab(/^All/).querySelector(".dot")).not.toBeNull();
-    expect(tab(/^Spam/).querySelector(".dot")).toBeNull();
-    expect(sub(/^All/).textContent).toBe("All (4)");
-    expect(sub(/^Needs Review/).textContent).toBe("Needs Review (1)");
-    expect(sub(/^Validated/).textContent).toBe("Validated (1)");
+    expect(tab(/^All/).textContent).toBe("All categories4");
+    expect(tab(/^SI BL Comparison/).textContent).toBe("SI BL Comparison2");
+    expect(tab(/^Spam/).textContent).toBe("Spam1");
+    expect(sub(/^All/).textContent).toBe("All statuses4");
+    expect(sub(/^Needs Review/).textContent).toBe("Needs Review1");
+    expect(sub(/^Validated/).textContent).toBe("Validated1");
+    expect(seen(/^All/).textContent).toBe("All emails4");
+    expect(seen(/^Unread/).textContent).toBe("Unread3");
+    expect(seen(/^Read/).textContent).toBe("Read1");
   });
 
   it("hides counts while loading and shows placeholder rows", () => {
     rows = [];
     mount("loading");
-    expect(tab(/^All/).textContent).toBe("All");
+    expect(tab(/^All/).textContent).toBe("All categories");
     expect(document.querySelectorAll("tbody tr.skel-row")).toHaveLength(8);
   });
 
@@ -104,15 +111,28 @@ describe("Emails table", () => {
 });
 
 describe("Emails filters", () => {
-  it("filters by category from the address, keeping the status in the tab links", () => {
+  it("filters by category from the address, keeping the other choices in the option links", () => {
     query = "view=document-comparison&status=needs-review";
     mount();
     expect(ids()).toEqual(["email_010"]);
-    expect(tab(/^Comparisons/).getAttribute("aria-current")).toBe("page");
+    expect(tab(/^SI BL Comparison/).getAttribute("aria-checked")).toBe("true");
     expect(tab(/^Spam/).getAttribute("href")).toBe("/emails?view=spam&status=needs-review");
+    expect(tab(/^Spam/).textContent).toBe("Spam0"); // counted under the chosen status
     expect(tab(/^All/).getAttribute("href")).toBe("/emails?status=needs-review");
     expect(sub(/^All/).getAttribute("href")).toBe("/emails?view=document-comparison");
     expect(sub(/^Validated/).getAttribute("href")).toBe("/emails?view=document-comparison&status=validated");
+    expect(seen(/^Unread/).getAttribute("href")).toBe("/emails?view=document-comparison&status=needs-review&read=unread");
+  });
+
+  it("filters by read state", () => {
+    query = "read=read";
+    const { unmount } = mount();
+    expect(ids()).toEqual(["email_010"]);
+    unmount();
+    query = "read=unread";
+    mount();
+    expect(ids()).toEqual(["email_003", "email_002", "email_001"]);
+    expect(screen.getByRole("button", { name: /^Read\/Unread/ }).querySelector("b")!.textContent).toBe("Unread");
   });
 
   it("filters validated emails", () => {
@@ -125,7 +145,7 @@ describe("Emails filters", () => {
     query = "view=validated";
     mount();
     expect(ids()).toEqual(["email_001"]);
-    expect(tab(/^Comparisons/).getAttribute("aria-current")).toBe("page");
+    expect(tab(/^SI BL Comparison/).getAttribute("aria-checked")).toBe("true");
   });
 
   it("ignores an unknown category", () => {
@@ -321,8 +341,8 @@ describe("Voyage page", () => {
     expect(screen.getByRole("link", { name: "Shipments" }).getAttribute("href")).toBe("/shipments");
     expect(document.querySelector(".voyage-map")!.textContent).toBe("email_001"); // email_010 needs review, so it draws no leg
     expect(ids()).toEqual(["email_010", "email_001"]);
-    expect(tab(/^All/).textContent).toBe("All (2)");
-    expect(tab(/Invoices/).getAttribute("href")).toBe("/shipments?voyage=NAP+914+V.BS007&view=invoice");
+    expect(tab(/^All/).textContent).toBe("All categories2");
+    expect(tab(/^Invoice/).getAttribute("href")).toBe("/shipments?voyage=NAP+914+V.BS007&view=invoice");
     expect(sub(/Validated/).getAttribute("href")).toBe("/shipments?voyage=NAP+914+V.BS007&status=validated");
   });
 
@@ -337,7 +357,7 @@ describe("Voyage page", () => {
     expect(ids()).toEqual(["email_003", "email_002", "email_001"]);
     fireEvent.click(screen.getByRole("button", { name: "email_002" }));
     expect(ids()).toEqual(["email_002"]);
-    expect(tab(/^All/).textContent).toBe("All (1)");
+    expect(tab(/^All/).textContent).toBe("All categories1");
     expect(screen.getAllByRole("button", { name: /email_/ })).toHaveLength(2); // the globe still lists every leg
     fireEvent.click(screen.getByRole("button", { name: "Clear the leg filter Port Klang to Long Beach" }));
     expect(ids()).toEqual(["email_003", "email_002", "email_001"]);
