@@ -175,8 +175,9 @@ export function toShipment(doc: Doc): Shipment {
   if (comparison.performed_at) trail.push({ at: str(comparison.performed_at), action: `Auto-comparison: ${str(comparison.status)}` });
   if (reviewReasons.length) trail.push({ at: str((doc.last_ingestion_error as Doc | undefined)?.occurred_at ?? comparison.performed_at ?? doc.classified_at), action: `Human review required: ${reviewReasons.join(' ')}` });
   if (review?.reviewed_at) {
+    const who = str(review.reviewed_by) || "unknown reviewer";
     const edited = review.edited_side ? `${str(review.edited_side).toUpperCase()} edited, ` : "";
-    trail.push({ at: str(review.reviewed_at), action: `Manual verification saved by ${str(review.reviewed_by) || "unknown reviewer"} (${edited}${status === "clean" ? "all matched & cleared" : "override flagged"})` });
+    trail.push({ at: str(review.reviewed_at), action: doc.classification === "Document-Comparison Request" ? `Manual verification saved by ${who} (${edited}${status === "clean" ? "all matched & cleared" : "override flagged"})` : `Cleared by ${who}` });
   }
   if (read?.marked_at) trail.push({ at: str(read.marked_at), action: `Marked as read by ${str(read.marked_by) || "unknown reviewer"}` });
   trail.sort((a, b) => a.at.localeCompare(b.at));
@@ -284,7 +285,7 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
     events.push({
       id: `${emailId}:${docId}`,
       at: str(a.occurred_at),
-      kind: review ? "review_saved" : "marked_read",
+      kind: review ? "review_saved" : a.action === "cleared" ? "cleared" : "marked_read",
       actor: names[moderator] || moderator || "Unknown",
       bot: false,
       emailId,
@@ -314,20 +315,47 @@ export async function findModerator(username: string): Promise<{ id: string; nam
 const requestTime = (fieldPath: string) => ({ fieldPath, setToServerValue: "REQUEST_TIME" });
 const actionError = (message: string, status: number) => Object.assign(new Error(message), { status });
 
+type Snapshot = { name: string; fields?: Record<string, FsValue>; updateTime: string };
+
+async function loadEmail(id: string): Promise<{ snapshot: Snapshot; before: Doc }> {
+  try {
+    const snapshot: Snapshot = await fsGet(`emails/${encodeURIComponent(id)}`);
+    return { snapshot, before: decodeMap(snapshot.fields ?? {}) };
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) throw actionError("Email not found", 404);
+    throw e;
+  }
+}
+
+// One commit: the masked update (stamped with the server time at `timeField`) and its activity record. Returns that time.
+async function commitAction(snapshot: Snapshot, updates: Doc, mask: string[], timeField: string, activity: Doc): Promise<string> {
+  const writes = [{
+    update: { name: snapshot.name, fields: encodeMap(updates) },
+    updateMask: { fieldPaths: mask },
+    currentDocument: { updateTime: snapshot.updateTime },
+    updateTransforms: [requestTime(timeField)],
+  }, {
+    update: { name: `${snapshot.name}/activity/${crypto.randomUUID()}`, fields: encodeMap({ ...activity, after: updates }) },
+    currentDocument: { exists: false },
+    updateTransforms: [requestTime("occurred_at")],
+  }];
+  try {
+    const result = await fs(":commit", { method: "POST", body: JSON.stringify({ writes }) });
+    return result.writeResults[0].transformResults[0].timestampValue;
+  } catch (e) {
+    if ((e as { status?: number }).status === 409 || ((e as Error).message.includes("FAILED_PRECONDITION"))) {
+      throw actionError("The record changed while saving. Refresh and try again.", 409);
+    }
+    throw e;
+  }
+}
+
 // Edits never touch the `si` / `bl` maps the n8n workflow writes; they are stored as overrides under `review`.
 // `review.fields` is the BL override (the name predates SI editing, so existing reviews keep working);
 // `review.si_fields` is the SI override. Without `fields` the call marks the email as read instead.
 // `moderator` is the logged-in moderator's document id, which the action is attributed to.
 export async function saveModeratorAction(moderator: string, id: string, fields?: Fields, side: Side = "bl"): Promise<Shipment> {
-  const path = `emails/${encodeURIComponent(id)}`;
-  let snapshot: { name: string; fields?: Record<string, FsValue>; updateTime: string };
-  try {
-    snapshot = await fsGet(path);
-  } catch (e) {
-    if ((e as { status?: number }).status === 404) throw actionError("Email not found", 404);
-    throw e;
-  }
-  const before = decodeMap(snapshot.fields ?? {});
+  const { snapshot, before } = await loadEmail(id);
   const current = toShipment(before);
   if (!fields && current.isRead) return current;
   if (fields && (current.category !== "document-comparison" || !current.referenceFields || !current.extractedFields)) {
@@ -352,34 +380,35 @@ export async function saveModeratorAction(moderator: string, id: string, fields?
   const changes: Doc = fields ? Object.fromEntries(FIELDS
     .filter((f) => saved?.[f.key] !== fields[f.key])
     .map((f) => [FIRESTORE_KEYS[f.key], { before: saved?.[f.key] ?? null, after: fields[f.key] }])) : {};
-  const writes = [{
-    update: { name: snapshot.name, fields: encodeMap(updates) },
-    updateMask: { fieldPaths: mask },
-    currentDocument: { updateTime: snapshot.updateTime },
-    updateTransforms: [requestTime(timeField)],
-  }, {
-    update: { name: `${snapshot.name}/activity/${crypto.randomUUID()}`, fields: encodeMap({
-      moderator_id: moderator,
-      action: fields ? "review_saved" : "marked_read",
-      edited_side: fields ? side : null,
-      changes,
-      before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null, human_review_reasons: before.human_review_reasons ?? [] } : { read_status: before.read_status ?? null },
-      after: updates,
-    }) },
-    currentDocument: { exists: false },
-    updateTransforms: [requestTime("occurred_at")],
-  }];
-  try {
-    const result = await fs(":commit", { method: "POST", body: JSON.stringify({ writes }) });
-    const map = updates[fields ? "review" : "read_status"] as Doc;
-    map[fields ? "reviewed_at" : "marked_at"] = result.writeResults[0].transformResults[0].timestampValue;
-    // Mirror the nested mask: the untouched side's override under `review` survives the save.
-    const review = fields ? { ...((before.review as Doc | undefined) ?? {}), ...(updates.review as Doc) } : before.review;
-    return toShipment({ ...before, ...updates, review });
-  } catch (e) {
-    if ((e as { status?: number }).status === 409 || ((e as Error).message.includes("FAILED_PRECONDITION"))) {
-      throw actionError("The record changed while saving. Refresh and try again.", 409);
-    }
-    throw e;
-  }
+  const at = await commitAction(snapshot, updates, mask, timeField, {
+    moderator_id: moderator,
+    action: fields ? "review_saved" : "marked_read",
+    edited_side: fields ? side : null,
+    changes,
+    before: fields ? { review: before.review ?? null, status: before.status ?? null, human_review_required: before.human_review_required ?? null, human_review_reasons: before.human_review_reasons ?? [] } : { read_status: before.read_status ?? null },
+  });
+  const map = updates[fields ? "review" : "read_status"] as Doc;
+  map[fields ? "reviewed_at" : "marked_at"] = at;
+  // Mirror the nested mask: the untouched side's override under `review` survives the save.
+  const review = fields ? { ...((before.review as Doc | undefined) ?? {}), ...(updates.review as Doc) } : before.review;
+  return toShipment({ ...before, ...updates, review });
+}
+
+// The flags a moderator resolves by clearing an email; the activity record keeps what they were.
+const CLEARED = { status: "cleared", human_review_required: false, human_review_reasons: [], missing_attachments_warning: null, classification_error: null, last_ingestion_error: null };
+
+// A moderator validates a flagged email that has no SI / BL comparison (comparisons are cleared by saving matching fields).
+export async function clearEmail(moderator: string, id: string): Promise<Shipment> {
+  const { snapshot, before } = await loadEmail(id);
+  const current = toShipment(before);
+  if (current.category === "document-comparison") throw actionError("Comparison emails are cleared by saving verified fields", 409);
+  if (current.status !== "discrepancy") return current;
+  const at = await commitAction(snapshot, { ...CLEARED, review: { reviewed_by: moderator } }, ["review.reviewed_by", ...Object.keys(CLEARED)], "review.reviewed_at", {
+    moderator_id: moderator,
+    action: "cleared",
+    edited_side: null,
+    changes: {},
+    before: Object.fromEntries(Object.keys(CLEARED).map((k) => [k, before[k] ?? null])),
+  });
+  return toShipment({ ...before, ...CLEARED, review: { ...((before.review as Doc | undefined) ?? {}), reviewed_by: moderator, reviewed_at: at } });
 }

@@ -124,13 +124,13 @@ export default function Emails({ voyage }: { voyage?: string }) {
   const go = (i: number) => () => setOpenId(rows[i].id);
 
   // Server runs the deterministic 7-field comparison and returns the updated shipment.
-  // Without `fields` it marks the email as read instead.
-  const save = async (s: Shipment, side?: Side, fields?: Fields) => {
+  // Without `fields` it marks the email as read, or with `clear` validates a flagged email that has no comparison.
+  const save = async (s: Shipment, side?: Side, fields?: Fields, clear?: boolean) => {
     if (busy.current) return;
     busy.current = true;
     setSaving(true);
     try {
-      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${fields ? "review" : "read"}`, {
+      const res = await fetch(`/api/emails/${encodeURIComponent(s.id)}/${clear ? "clear" : fields ? "review" : "read"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ side, fields }),
@@ -138,7 +138,7 @@ export default function Emails({ voyage }: { voyage?: string }) {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
       const updated: Shipment = await res.json();
       setShipments((all) => all.map((x) => (x.id === s.id ? updated : x)));
-      showToast(fields ? `Saved verified ${side!.toUpperCase()} fields for ${s.id}` : `Marked ${s.id} as read`);
+      showToast(clear ? `Cleared ${s.id}` : fields ? `Saved verified ${side!.toUpperCase()} fields for ${s.id}` : `Marked ${s.id} as read`);
     } catch (e) {
       showToast(`Save failed: ${(e as Error).message}`);
     } finally {
@@ -339,6 +339,7 @@ export default function Emails({ voyage }: { voyage?: string }) {
           saving={saving}
           onSave={(side, fields) => save(selected, side, fields)}
           onMarkRead={() => save(selected)}
+          onClear={() => save(selected, undefined, undefined, true)}
           onToast={showToast}
           readOnly={me.role !== "moderator"}
           onPrev={at > 0 ? go(at - 1) : undefined}

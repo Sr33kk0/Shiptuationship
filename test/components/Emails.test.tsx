@@ -232,6 +232,18 @@ describe("Emails review", () => {
     expect(busy.current).toBe(false);
   });
 
+  it("clears a flagged email", async () => {
+    rows[1] = { ...rows[1], status: "discrepancy", reviewReasons: ["Check it"] };
+    const fetchMock = ok({ ...rows[1], status: "clean", reviewReasons: [] });
+    vi.stubGlobal("fetch", fetchMock);
+    mount();
+    fireEvent.click(screen.getByText("Bravo invoice"));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Clear & Validate" })));
+    expect(fetchMock).toHaveBeenCalledWith("/api/emails/email_002/clear", expect.objectContaining({ method: "POST" }));
+    expect(rows[1].status).toBe("clean");
+    expect(toast).toHaveBeenCalledWith("Cleared email_002");
+  });
+
   it("saves reviewed fields", async () => {
     const fetchMock = ok(rows[0]);
     vi.stubGlobal("fetch", fetchMock);

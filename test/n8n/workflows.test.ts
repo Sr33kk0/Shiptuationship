@@ -248,6 +248,7 @@ describe("daily-report workflow", () => {
       doc({ classification: s("Document-Comparison Request"), classified_at: hoursAgo(3), status: s("pending") }), // no attachments
       doc({ classification: s("Invoice Queries"), classified_at: hoursAgo(4), last_ingestion_error: { mapValue: { fields: {} } } }),
       doc({ classification: s("Other"), classified_at: hoursAgo(5), status: s("needs_review"), classification_error: s("bad") }),
+      doc({ classification: s("Invoice Queries"), classified_at: hoursAgo(6), status: s("cleared"), read_status: read }), // cleared by a moderator, not a comparison
       doc({ classification: s("New SI Request"), classified_at: hoursAgo(30), human_review_required: { booleanValue: true } }),
       doc({ classification: s("General Messages"), classified_at: hoursAgo(48), read_status: read }),
     ];
@@ -258,10 +259,10 @@ describe("daily-report workflow", () => {
       `[Shiptuationship Daily Report (${date})](https://shiptuationship.vercel.app/dashboard)`,
       "",
       "🕗 In the last 24 hours,",
-      "📩 New Emails: 5",
+      "📩 New Emails: 6",
       "• SI BL Comparison: 3",
       "• SI Request: 0",
-      "• Invoice: 1",
+      "• Invoice: 2",
       "• General: 0",
       "• Spam: 1",
       "Comparisons Cleared: 1",

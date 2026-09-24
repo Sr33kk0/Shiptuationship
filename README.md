@@ -226,7 +226,7 @@ Shiptuationship has **two halves** that share one database:
 
 | Path | Purpose |
 |------|---------|
-| `emails/{id}/activity/{eventId}` | Immutable audit record per moderator action: `moderator_id`, `action` (`review_saved` / `marked_read`), `edited_side`, `changes` (per-field before and after), `before`, `after`, `occurred_at` (server time). Feeds the **User Log** |
+| `emails/{id}/activity/{eventId}` | Immutable audit record per moderator action: `moderator_id`, `action` (`review_saved` / `cleared` / `marked_read`), `edited_side`, `changes` (per-field before and after), `before`, `after`, `occurred_at` (server time). Feeds the **User Log** |
 | `moderators/{id}` | One per moderator or auditor, added by hand (no sign-up). The id is the handle actions are attributed to. `display_name`, `role` (`moderator`, or `auditor` for read-only; a missing or unknown role is read-only), `username` (lowercase, the log in name), `password_hash` (from `npm run hash-password`) |
 | `ingestion_queue/{createdTime}_{driveFileId}` | One row per Drive file: `file_id`, `name`, `created_time`, `status` (`queued → processing → done / failed`), `queued_at`, `claimed_at`, `finished_at`, `last_error` |
 
@@ -241,6 +241,7 @@ Shiptuationship has **two halves** that share one database:
 | `/api/emails` | `GET` | List emails, mapped to the shape the UI uses |
 | `/api/emails/{id}/review` | `POST` | Body `{ side: "si" \| "bl", fields }`: save a verified override for one side, re-run the comparison, log the activity |
 | `/api/emails/{id}/read` | `POST` | Mark an email as read (idempotent) |
+| `/api/emails/{id}/clear` | `POST` | Clear & validate a flagged email that is not an SI/BL comparison: sets `cleared`, drops its review flags and ingestion errors, logs the activity |
 | `/api/audit?source=user\|system` | `GET` | User Log (moderator activity) or System Log (n8n activity) |
 | `/api/session` | `POST` / `DELETE` | Log in with body `{ email, password }` (`204` and a session cookie, or `401 {"error":"Wrong email or password"}`), log out |
 
