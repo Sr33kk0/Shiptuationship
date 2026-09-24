@@ -816,7 +816,7 @@ a.chip svg:last-child { color: var(--faint); }
 [data-theme="dark"] .overlay, [data-theme="dark"] .sheet-overlay, [data-theme="dark"] .backdrop { background: rgba(0, 0, 0, 0.6); }
 
 /* settings: colour scheme picker */
-.theme-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+.theme-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)); gap: 16px; }
 .theme-card { text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 14px; border: 2px solid var(--edge); border-radius: 14px; background: var(--surface); transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
 .theme-card:hover { border-color: var(--edge-2); transform: translateY(-1px); }
 .theme-card[aria-checked="true"] { border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -832,7 +832,13 @@ a.chip svg:last-child { color: var(--faint); }
 .theme-name b { font-weight: 700; }
 .theme-name svg { color: var(--blue); }
 .theme-card small { padding: 0 4px; font-size: 12px; line-height: 16px; color: var(--muted); }
-.scale-seg { margin-top: 18px; width: fit-content; }
+/* settings: GUI scale slider. Each stop label is zero-wide and centred on its tick; the 8px inset is half the native thumb */
+.scale { margin-top: 18px; max-width: 560px; container-type: inline-size; }
+.scale input { display: block; width: 100%; margin: 0; accent-color: var(--blue); cursor: pointer; }
+.scale-stops { display: flex; justify-content: space-between; padding: 6px 8px 0; font-size: 12px; line-height: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.scale-stops span { width: 0; display: flex; justify-content: center; white-space: nowrap; }
+.scale-stops .on { color: var(--ink); font-weight: 700; }
+@container (max-width: 300px) { .scale-stops span:not(.on) { visibility: hidden; } } /* too tight for every label: only the chosen one, under the thumb */
 [data-theme="dark"] .paper.bl { border-color: var(--accent-ring); }
 [data-theme="dark"] .paper.bl h4 { color: var(--accent-text); }
 [data-theme="dark"] .paper.bl .ref { background: var(--accent-soft); border-color: rgba(56, 189, 248, 0.4); color: var(--accent-text); }
