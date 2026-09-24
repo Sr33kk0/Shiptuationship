@@ -65,7 +65,7 @@ export default function Emails() {
   const [query, setQuery] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rawDate", dir: "desc" });
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(params.get("open")); // /emails?open=email_070 opens that email (the Shipments page links here)
   const [sortOpen, setSortOpen] = useState(false); // the sort sheet (phones and tablets)
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);

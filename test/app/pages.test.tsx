@@ -11,6 +11,7 @@ import RootLayout, { metadata, viewport } from "@/app/layout";
 import HomePage from "@/app/page";
 import LoginPage from "@/app/login/page";
 import SettingsPage from "@/app/settings/page";
+import ShipmentsPage from "@/app/shipments/page";
 import { currentModerator } from "@/lib/session";
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
@@ -19,6 +20,7 @@ vi.mock("next/font/google", () => ({ Figtree: () => ({ variable: "font-figtree" 
 vi.mock("@/components/AuditLog", () => ({ default: ({ source }: { source: string }) => <main>audit:{source}</main> }));
 vi.mock("@/components/Dashboard", () => ({ default: () => <main>dashboard</main> }));
 vi.mock("@/components/Emails", () => ({ default: () => <main>emails</main> }));
+vi.mock("@/components/Shipments", () => ({ default: () => <main>shipments</main> }));
 vi.mock("@/components/Settings", () => ({ default: () => <main>settings</main> }));
 vi.mock("@/components/Landing", () => ({ default: () => <main>landing</main> }));
 vi.mock("@/components/LogIn", () => ({ default: () => <main>login</main> }));
@@ -37,6 +39,7 @@ describe("app pages", () => {
     expect(html(<DashboardPage />)).toBe("<main>dashboard</main>");
     expect(html(<EmailsPage />)).toBe("<main>emails</main>");
     expect(html(<SettingsPage />)).toBe("<main>settings</main>");
+    expect(html(<ShipmentsPage />)).toBe("<main>shipments</main>");
     expect(html(<UserLogPage />)).toBe("<main>audit:user</main>");
     expect(html(<SystemLogPage />)).toBe("<main>audit:system</main>");
   });

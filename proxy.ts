@@ -15,4 +15,4 @@ export function proxy(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/dashboard/:path*", "/emails/:path*", "/audit/:path*", "/settings/:path*", "/api/:path*"] };
+export const config = { matcher: ["/dashboard/:path*", "/emails/:path*", "/shipments/:path*", "/audit/:path*", "/settings/:path*", "/api/:path*"] };

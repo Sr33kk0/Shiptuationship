@@ -98,6 +98,23 @@ describe("toShipment", () => {
     expect([s.sender, s.senderName, s.category]).toEqual(["x@example.com", "x@example.com", "spam"]);
   });
 
+  it("reads the vessel and voyage from the subject, else the body", async () => {
+    const { toShipment } = await load();
+    const pick = (doc: Record<string, unknown>) => {
+      const s = toShipment(doc);
+      return `${s.vessel}|${s.voyage}`;
+    };
+    expect([
+      pick({ subject: "RE_ Draft BL INDO SUKSES 65 V.51NW1 SINGAPORE - amend BL 057" }),
+      pick({ subject: "10_01_2026 - UPDATE SUMMARY NAP 914 V.BS007" }),
+      pick({ subject: "_RPA_ India HSS SD Billing Process Completed - LE HAVRE V.QI540A" }),
+      pick({ subject: "Draft BL MMSS 2507 V.257087E NHAVA SHEVA", body: "Vessel SOLID 16 V.044NW2" }),
+      pick({ subject: "daily Berthing Report - 01 JAN 2026", body: "Vessel MARCOPOLO 810 V.BS005 berthed on schedule." }),
+      pick({ subject: "Update", body: "Attached the update summary for VISION 202 V.002. Loading completed." }),
+      pick({ subject: "Pending BL Release 03_01_2026", body: "No vessel here." }),
+    ]).toEqual(["INDO SUKSES 65|51NW1", "NAP 914|BS007", "LE HAVRE|QI540A", "MMSS 2507|257087E", "MARCOPOLO 810|BS005", "VISION 202|002", "|"]);
+  });
+
   it("keeps an unparseable date as text", async () => {
     const { toShipment } = await load();
     const s = toShipment({ received_at: "yesterday" });

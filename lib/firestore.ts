@@ -2,7 +2,7 @@
 // Never import this from a client component.
 import type { AuditEvent } from "./audit";
 import type { Role } from "./session";
-import { FIELDS, FIRESTORE_KEYS, mismatches, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
+import { FIELDS, FIRESTORE_KEYS, mismatches, parseVoyage, type Category, type FieldKey, type Fields, type Shipment, type Side, type Status } from "./shipments";
 
 const PROJECT = process.env.FIRESTORE_PROJECT_ID ?? "hokkien";
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
@@ -201,6 +201,7 @@ export function toShipment(doc: Doc): Shipment {
     attachmentNames: attachments,
     attachmentLinks,
     emailBody: str(doc.body),
+    ...parseVoyage(str(doc.subject), str(doc.body)),
     siRef: str((doc.si_source as Doc | undefined)?.filename) || undefined,
     blRef: str((doc.bl_source as Doc | undefined)?.filename) || undefined,
     extractedFields: toFields(review?.fields) ?? toFields(doc.bl),

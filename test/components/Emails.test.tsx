@@ -185,6 +185,12 @@ describe("Emails review", () => {
     expect(screen.getByRole("dialog", { name: "Email Transmission email_003" })).toBeTruthy();
   });
 
+  it("opens the email named in the address, as the Shipments page links to it", () => {
+    query = "open=email_002";
+    mount();
+    expect(screen.getByRole("dialog", { name: "Email Transmission email_002" })).toBeTruthy();
+  });
+
   it("steps through the list as filtered and sorted", () => {
     mount();
     fireEvent.click(screen.getByText("Delta spam"));

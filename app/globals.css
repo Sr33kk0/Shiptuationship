@@ -799,6 +799,40 @@ a.chip svg:last-child { color: var(--faint); }
 }
 @media (prefers-reduced-motion: reduce) { .ev-item, .ev-embed, .dd-menu { animation: none; } }
 
+/* Shipments: one expandable row per vessel + voyage, listing its emails */
+.ships { list-style: none; margin: 0; padding: 0; }
+.ships > li + li { border-top: 1px solid var(--line); }
+.ships > li:nth-child(-n + 15) { animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: var(--d, 0s); }
+.ship-skel { padding: 26px 24px; }
+.ship > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 12px 24px; cursor: pointer; transition: background 0.15s; }
+.ship > summary::-webkit-details-marker { display: none; }
+.ship > summary:hover { background: var(--row-hover); }
+.ship > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.ship-ic { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent-text); }
+.ship-name { min-width: 0; flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.ship-name b { font-size: 14px; line-height: 20px; font-weight: 700; color: var(--ink); }
+.ship-voy { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ship-meta { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ship-meta b { color: var(--ink); }
+.ship-meta small { display: block; font-size: 11px; line-height: 14px; color: var(--faint); }
+.ship-chev { display: flex; color: var(--chev); transition: transform 0.2s; }
+.ship[open] .ship-chev { transform: rotate(180deg); }
+.ship-emails { list-style: none; margin: 0; padding: 0 24px 12px 72px; animation: fade-in 0.2s ease-out; }
+.ship-emails a { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto 110px; grid-template-areas: "id subj tag when"; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-size: 13px; line-height: 18px; color: var(--ink); text-decoration: none; }
+.ship-emails a:hover { background: var(--surface-2); }
+.ship-emails .id { grid-area: id; font-size: 12px; font-weight: 600; color: var(--text-3); }
+.ship-emails .subj { grid-area: subj; }
+.ship-emails .tag { grid-area: tag; justify-self: start; }
+.ship-emails .when { grid-area: when; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .ship > summary { padding: 12px 16px; gap: 10px; }
+  .ship-emails { padding: 0 8px 12px; }
+  .ship-emails a { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "id tag" "subj subj" "when when"; gap: 4px 12px; }
+  .ship-emails .tag { justify-self: end; }
+  .ship-emails .when { text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) { .ships > li, .ship-emails { animation: none; } .ship-chev { transition: none; } }
+
 /* the paper documents in the review modal stay white in the light-family schemes (the tokens are pinned to their light values inside them); the dark scheme lets them go dark too */
 :root:not([data-theme="dark"]) .paper { --surface: #fff; --surface-2: #fafafa; --ink: #0f172a; --ink-2: #1e293b; --text-2: #525252; --text-3: #334155; --muted: #737373; --faint: #a3a3a3; --line: #f5f5f5; --edge: #e5e5e5; --edge-2: #d4d4d4; --border: rgba(229, 229, 229, 0.8); --blue: #2563eb; }
 
