@@ -1109,6 +1109,77 @@
       "id": "473cfc39-dc89-4f3e-8825-358257996010",
       "name": "Collect Image OCR Text",
       "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Write Comparison runs once per attachment (Loop Attachments' done branch), so alert once per email.\n// Its PATCH response is the whole email doc, and Compare Fields has just set human_review_required.\nconst f = $input.first().json.fields ?? {};\nif (f.human_review_required?.booleanValue !== true) return [];\nconst s = k => f[k]?.stringValue ?? '';\nconst reasons = (f.human_review_reasons?.arrayValue?.values ?? []).map(v => '• ' + v.stringValue);\nconst text = [\n  '⚠️ Email needs human review',\n  `From: ${s('from')}`,\n  `Subject: ${s('subject')}`,\n  `Category: ${s('classification')}`,\n  ...reasons,\n  '',\n  'https://shiptuationship.vercel.app/emails',\n]\n  .join('\\n')\n  .replace(/@/g, '@\\u200b') // sender-controlled text: stop a subject pinging @everyone on Discord\n  .slice(0, 1900); // Discord caps messages at 2000 chars, and one attachment error alone can be 2000\nreturn [{ json: { text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        2864
+      ],
+      "id": "3512ab26-feea-403a-8622-d1a2ec1d6922",
+      "name": "Build Review Alert"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        2752
+      ],
+      "id": "5442aca2-8a81-4e3c-a7d1-3531d21c24ee",
+      "name": "Send Review Alert",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": "Select your Telegram bot credential and set Chat ID. No parse mode: email subjects would break Markdown. Continues on error so a chat outage never fails ingestion."
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "guildId": {
+          "__rl": true,
+          "value": "1470056103554449431",
+          "mode": "list",
+          "cachedResultName": "Myself",
+          "cachedResultUrl": "https://discord.com/channels/1470056103554449431"
+        },
+        "channelId": {
+          "__rl": true,
+          "value": "1552606234769629234",
+          "mode": "list",
+          "cachedResultName": "shiptuationship",
+          "cachedResultUrl": "https://discord.com/channels/1470056103554449431/1552606234769629234"
+        },
+        "content": "={{ $json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        2976
+      ],
+      "id": "8c6356d6-78b0-4d6c-a6cc-aa325d439baf",
+      "name": "Send Discord Review Alert",
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": "Continues on error so a chat outage never fails ingestion.",
+      "credentials": {
+        "discordBotApi": {
+          "id": "2AnZIvLsQ1xgRPbA",
+          "name": "Discord Bot account"
+        }
+      }
     }
   ],
   "connections": {
@@ -1841,6 +1912,33 @@
         [
           {
             "node": "Prepare Attachment Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Comparison": {
+      "main": [
+        [
+          {
+            "node": "Build Review Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Review Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Discord Review Alert",
             "type": "main",
             "index": 0
           }

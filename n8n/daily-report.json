@@ -201,6 +201,9 @@
       ]
     }
   },
+  "settings": {
+    "timezone": "Asia/Kuala_Lumpur"
+  },
   "pinData": {},
   "meta": {
     "instanceId": "0fe95da9ee7d901179ecf30910c80a03a5e73b67df586a2ed180c1fbd58a5c97"
