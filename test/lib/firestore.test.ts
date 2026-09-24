@@ -302,7 +302,53 @@ describe("listAuditLog", () => {
       ["email/2:classified", "classified", "Invoice Queries"],
       ["email_001:classified", "classified", "Spam"],
     ]);
-    expect(events[0]).toMatchObject({ actor: "n8n Workflow", bot: true, subject: "Second", outcome: "", changes: [] });
+    expect(events[0]).toMatchObject({ actor: "n8n Workflow", bot: true, subject: "Second", outcome: "", changes: [], fields: [] });
+    expect(events[2].facts).toEqual([{ label: "From", value: "" }, { label: "Attachments", value: "None" }]);
+  });
+
+  it("details each compared field from the document's value to the normalised one", async () => {
+    const port = (original: string, status: string, extra: Record<string, unknown> = {}) => ({ original, status, ...extra });
+    mockFetch(at("/emails", { documents: [fsDoc(DOC, {
+      email_id: "email_001", subject: "Compare", from: "Amy <amy@x.com>", attachments: ["SI_1.pdf", "BL_1.pdf"], classification_error: "timeout",
+      classified_at: "2026-03-05T01:00:00Z", classification: "Document-Comparison Request",
+      si: { ...bl, shipper: "Acme Pte. Ltd.", port_of_loading: "SINGAPORE, SINGAPORE (SGSIN)", container_count: 4 },
+      bl: { ...bl, shipper: "ACME PTE LTD", port_of_loading: "SINGAPORE, SINGAPORE (SGSIN)", port_of_discharge: "Rotterdamm", container_count: 3 },
+      si_port_validation: { port_of_loading: port("Singapore", "added", { code: "SGSIN", normalized: "SINGAPORE, SINGAPORE (SGSIN)" }) },
+      bl_port_validation: { port_of_loading: port("SGSIN", "valid", { code: "SGSIN", normalized: "SINGAPORE, SINGAPORE (SGSIN)" }), port_of_discharge: port("Rotterdamm", "unknown_location", { reason: "Not a known port." }) },
+      si_source: { filename: "SI_1.pdf", drive_file_id: "abc" },
+      comparison: { performed_at: "2026-03-05T02:00:00Z", status: "flagged", fields: {
+        shipper: { match: true, discrepancy_type: "formatting", si_normalized: "ACME PTE LTD", bl_normalized: "ACME PTE LTD" },
+        consignee: { match: true },
+        port_of_loading: { match: true, discrepancy_type: "formatting", si_normalized: "SINGAPORE SINGAPORE SGSIN", bl_normalized: "SINGAPORE SINGAPORE SGSIN" },
+        port_of_discharge: { match: false, discrepancy_type: "real", si_normalized: "NLRTM", bl_normalized: "ROTTERDAMM" },
+        container_count: { match: false, discrepancy_type: "real", si_normalized: 4, bl_normalized: 3 },
+      } },
+    })] }));
+    const { listAuditLog } = await load();
+    const [compared, classified] = await listAuditLog("system");
+    expect(classified.facts).toEqual([
+      { label: "From", value: "Amy <amy@x.com>" },
+      { label: "Attachments", value: "SI_1.pdf, BL_1.pdf" },
+      { label: "Classifier error", value: "timeout" },
+    ]);
+    expect(compared.facts).toEqual([
+      { label: "SI document", value: "SI_1.pdf", href: "https://drive.google.com/file/d/abc/view" },
+      { label: "BL document", value: "Unnamed file" },
+      { label: "Blocked", value: "Email classification failed: timeout" },
+    ]);
+    const [shipper, consignee, pol, pod, count] = compared.fields!;
+    expect(compared.fields).toHaveLength(5);
+    expect(shipper).toEqual({ field: "Shipper", result: "formatting",
+      si: { document: "Acme Pte. Ltd.", normalized: "ACME PTE LTD", note: "", ok: true },
+      bl: { document: "ACME PTE LTD", normalized: "ACME PTE LTD", note: "", ok: true } });
+    expect(consignee).toMatchObject({ result: "match", si: { document: "B", normalized: "" } });
+    expect(pol).toMatchObject({ field: "Port of Loading (POL)", result: "formatting",
+      si: { document: "Singapore", normalized: "SINGAPORE, SINGAPORE (SGSIN)", note: "UN/LOCODE SGSIN added", ok: true },
+      bl: { document: "SGSIN", note: "UN/LOCODE SGSIN confirmed", ok: true } });
+    expect(pod).toMatchObject({ result: "mismatch",
+      si: { document: "NLRTM", normalized: "NLRTM", note: "Port was not validated.", ok: false },
+      bl: { document: "Rotterdamm", normalized: "ROTTERDAMM", note: "Not a known port.", ok: false } });
+    expect(count).toMatchObject({ result: "mismatch", si: { document: "4", normalized: "4" }, bl: { document: "3", normalized: "3" } });
   });
 
   it("lists moderator actions with names, outcomes and labelled changes", async () => {

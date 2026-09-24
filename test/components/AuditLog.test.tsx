@@ -103,6 +103,36 @@ describe("AuditLog", () => {
     expect(screen.queryByRole("button", { name: /^User/ })).toBeNull();
   });
 
+  it("expands a comparison into its documents and each field before and after normalising", async () => {
+    const side = (document: string, normalized: string, note = "", ok = true) => ({ document, normalized, note, ok });
+    serve([
+      event({ id: "s1", kind: "compared", actor: "n8n Workflow", bot: true, detail: "flagged", outcome: "",
+        facts: [{ label: "SI document", value: "SI_1.pdf", href: "https://drive.google.com/file/d/abc/view" }, { label: "BL document", value: "Not extracted" }],
+        fields: [
+          { field: "Shipper", result: "formatting", si: side("Acme Pte. Ltd.", "ACME PTE LTD"), bl: side("ACME PTE LTD", "ACME PTE LTD") },
+          { field: "Consignee", result: "match", si: side("B", ""), bl: side("B", "") },
+          { field: "Port of Discharge (POD)", result: "mismatch", si: side("NLRTM", "", "Port was not validated.", false), bl: side("Rotterdam", "ROTTERDAM, NETHERLANDS (NLRTM)", "UN/LOCODE NLRTM added") },
+        ] }),
+      event({ id: "s2", kind: "classified", actor: "n8n Workflow", bot: true, detail: "Spam", outcome: "", facts: [{ label: "From", value: "amy@x.com" }] }),
+    ]);
+    await mount("system");
+    fireEvent.click(screen.getByRole("button", { name: "3 fields compared, 1 mismatched" }));
+    expect(screen.getByRole("link", { name: "SI_1.pdf" }).getAttribute("href")).toBe("https://drive.google.com/file/d/abc/view");
+    expect(screen.getByText("Not extracted")).toBeTruthy();
+    const rows = [...document.querySelectorAll(".ev-cmp tbody tr")].map((r) => [...r.children].map((c) => c.textContent));
+    expect(rows).toEqual([
+      ["Shipper", "SI", "Acme Pte. Ltd.", "ACME PTE LTD", "Match after normalising"],
+      ["BL", "ACME PTE LTD", "ACME PTE LTD"],
+      ["Consignee", "SI", "B", "identical", "Exact match"],
+      ["BL", "B", "identical"],
+      ["Port of Discharge (POD)", "SI", "NLRTM", "emptyPort was not validated.", "Mismatch"],
+      ["BL", "Rotterdam", "ROTTERDAM, NETHERLANDS (NLRTM)UN/LOCODE NLRTM added"],
+    ]);
+    expect(document.querySelector(".ev-note[data-warn]")!.textContent).toBe("Port was not validated.");
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(screen.getByText("amy@x.com")).toBeTruthy();
+  });
+
   it("filters by action and user from the address", async () => {
     serve(userEvents);
     query = "action=review_saved&user=Daniel%20Ho";

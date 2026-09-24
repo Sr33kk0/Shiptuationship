@@ -12,7 +12,14 @@ export interface AuditEvent {
   detail: string; // classification name / comparison status / "BL" or "SI" for a review / ""
   outcome: string; // review result: "cleared" | "flagged" (incl. needs_review) | ""
   changes: { field: string; before: string; after: string }[];
+  facts?: { label: string; value: string; href?: string }[]; // system events: context shown when the entry is expanded
+  fields?: ComparedField[]; // "compared" only: how each of the seven fields was compared
 }
+
+// One document's side of a compared field: the value read off the document, then the value the comparison used.
+// `normalized` is "" when both documents were identical, so nothing needed normalising. `note` is the port check's verdict on ports.
+export interface ComparedSide { document: string; normalized: string; note: string; ok: boolean }
+export interface ComparedField { field: string; result: "match" | "formatting" | "mismatch"; si: ComparedSide; bl: ComparedSide }
 
 export const KINDS: Record<AuditKind, { label: string; color: string; icon: "doc" | "check" | "search" | "filter" }> = {
   classified: { label: "Classified", color: "#7e22ce", icon: "filter" },
