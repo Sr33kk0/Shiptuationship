@@ -5,6 +5,7 @@ import Settings from "@/components/Settings";
 
 beforeEach(() => {
   delete document.documentElement.dataset.theme;
+  document.documentElement.style.removeProperty("--ui-scale");
 });
 
 describe("Settings", () => {
@@ -21,5 +22,14 @@ describe("Settings", () => {
     expect(document.documentElement.dataset.theme).toBe("sunset");
     expect(screen.getByRole("radio", { name: /Sunset/ }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("radio", { name: /Light/ }).getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("changes the interface size on click", () => {
+    render(<Settings />);
+    expect(screen.getByRole("button", { name: "100%" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "125%" }));
+    expect(document.documentElement.style.getPropertyValue("--ui-scale")).toBe("1.25");
+    expect(screen.getByRole("button", { name: "125%" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "100%" }).getAttribute("aria-pressed")).toBe("false");
   });
 });

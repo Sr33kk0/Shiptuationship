@@ -32,13 +32,29 @@ export function setTheme(id: ThemeId) {
   listeners.forEach((l) => l());
 }
 
+const subscribe = (notify: () => void) => {
+  listeners.add(notify);
+  return () => listeners.delete(notify);
+};
+
 export function useTheme(): ThemeId {
-  return useSyncExternalStore(
-    (notify) => {
-      listeners.add(notify);
-      return () => listeners.delete(notify);
-    },
-    current,
-    () => "light",
-  );
+  return useSyncExternalStore(subscribe, current, () => "light");
+}
+
+// GUI scale: globals.css zooms the whole page by --ui-scale, so every size grows together. 1 is the default.
+export const SCALES = [0.9, 1, 1.1, 1.25, 1.5] as const;
+export const SCALE_KEY = "shiptuationship-scale";
+
+const currentScale = () => Number(document.documentElement.style.getPropertyValue("--ui-scale")) || 1;
+
+export function setScale(s: number) {
+  document.documentElement.style.setProperty("--ui-scale", String(s));
+  try {
+    localStorage.setItem(SCALE_KEY, String(s));
+  } catch {}
+  listeners.forEach((l) => l());
+}
+
+export function useScale(): number {
+  return useSyncExternalStore(subscribe, currentScale, () => 1);
 }

@@ -83,12 +83,16 @@ export default function DateRangePicker({ value, onChange }: Props) {
   // desktop popover: sit under the trigger, right-aligned to it, kept on screen, flipped above if there is no room below
   useLayoutEffect(() => {
     if (!open || asSheet) return;
-    const t = trigger.current?.getBoundingClientRect();
+    const el = trigger.current;
     const h = pop.current?.offsetHeight ?? 380;
-    if (!t) return;
-    const left = Math.min(Math.max(t.right - POP_W, 8), window.innerWidth - POP_W - 8);
+    if (!el) return;
+    // the GUI scale zooms the page: the rect and window come back in zoomed px, top/left are applied in unzoomed ones
+    const z = el.currentCSSZoom || 1;
+    const r = el.getBoundingClientRect();
+    const t = { top: r.top / z, right: r.right / z, bottom: r.bottom / z };
+    const left = Math.min(Math.max(t.right - POP_W, 8), window.innerWidth / z - POP_W - 8);
     const below = t.bottom + 8;
-    setPos({ left, top: below + h > window.innerHeight - 8 && t.top - 8 - h > 8 ? t.top - 8 - h : below });
+    setPos({ left, top: below + h > window.innerHeight / z - 8 && t.top - 8 - h > 8 ? t.top - 8 - h : below });
   }, [open, asSheet, view]);
 
   // keyboard focus lands on the chosen (or today's) day when the calendar opens (once it is visible: a hidden element cannot take focus)
