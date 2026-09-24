@@ -32,8 +32,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* before first paint, so there is no flash: the app applies the colour scheme chosen in Settings; the front page (logged out) is always the default light one */}
-        {moderator && <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("shiptuationship-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}` }} />}
+        {/* before first paint, so there is no flash: the app applies the colour scheme and GUI scale chosen in Settings; the front page (logged out) always uses the defaults */}
+        {moderator && <script dangerouslySetInnerHTML={{ __html: `try{var d=document.documentElement,t=localStorage.getItem("shiptuationship-theme"),s=localStorage.getItem("shiptuationship-scale");if(t)d.dataset.theme=t;if(+s>0)d.style.setProperty("--ui-scale",s)}catch(e){}` }} />}
       </head>
       <body className={figtree.variable}>
         {moderator ? (

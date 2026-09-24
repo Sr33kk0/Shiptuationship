@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { THEMES, THEME_KEY, setTheme, useTheme } from "@/lib/theme";
+import { SCALE_KEY, THEMES, THEME_KEY, setScale, setTheme, useScale, useTheme } from "@/lib/theme";
 
 beforeEach(() => {
   delete document.documentElement.dataset.theme;
@@ -55,5 +55,18 @@ describe("useTheme", () => {
       expect(t.swatch).toHaveLength(4);
       expect(t.bar).toMatch(/^#[0-9a-f]{6}$/);
     }
+  });
+});
+
+describe("GUI scale", () => {
+  beforeEach(() => document.documentElement.style.removeProperty("--ui-scale"));
+
+  it("applies the scale, remembers it, and useScale follows it", () => {
+    const { result } = renderHook(() => useScale());
+    expect(result.current).toBe(1);
+    act(() => setScale(1.25));
+    expect(document.documentElement.style.getPropertyValue("--ui-scale")).toBe("1.25");
+    expect(localStorage.getItem(SCALE_KEY)).toBe("1.25");
+    expect(result.current).toBe(1.25);
   });
 });

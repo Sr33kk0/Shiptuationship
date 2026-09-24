@@ -1,11 +1,12 @@
 "use client";
 
-import { THEMES, setTheme, useTheme } from "@/lib/theme";
+import { SCALES, THEMES, setScale, setTheme, useScale, useTheme } from "@/lib/theme";
 import { Icon } from "./Icon";
 import Profile from "./Profile";
 
 export default function Settings() {
   const theme = useTheme();
+  const scale = useScale();
 
   return (
     <div className="scroll">
@@ -41,6 +42,19 @@ export default function Settings() {
                 {theme === t.id && <Icon d="check" size={16} sw={2.6} />}
               </span>
               <small>{t.note}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel fade-up" style={{ "--d": "0.2s" } as React.CSSProperties}>
+        <h3 className="card-title">Interface size</h3>
+        <p className="bars-note">Make text, buttons and spacing bigger or smaller. Also remembered in this browser.</p>
+
+        <div className="seg scale-seg" role="group" aria-label="Interface size">
+          {SCALES.map((s) => (
+            <button key={s} aria-pressed={scale === s} onClick={() => setScale(s)}>
+              {Math.round(s * 100)}%
             </button>
           ))}
         </div>

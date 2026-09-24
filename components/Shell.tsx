@@ -80,7 +80,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     if (box && el) {
       // measured against the whole menu, so the one highlight can slide between both groups
       const r = el.getBoundingClientRect();
-      setHl({ y: r.top - box.getBoundingClientRect().top, h: r.height });
+      const z = box.currentCSSZoom || 1; // the GUI scale zooms the page: rects come back zoomed, the transform below is applied unzoomed
+      setHl({ y: (r.top - box.getBoundingClientRect().top) / z, h: r.height / z });
     }
   }, [current, compact]);
 
