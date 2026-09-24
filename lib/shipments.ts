@@ -78,6 +78,9 @@ export const parseVoyage = (...texts: string[]) => {
   return { vessel: "", voyage: "" };
 };
 
+/** "NAP 914 V.BS007": one voyage's id, used to group emails and in the /shipments?voyage= address ("" when no voyage). */
+export const voyageKey = (s: Shipment) => (s.voyage ? `${s.vessel} V.${s.voyage}` : "");
+
 export const mismatches =(a: Fields, b: Fields) => FIELDS.filter((f) => a[f.key] !== b[f.key]).map((f) => f.key);
 
 // ---- when an email was classified, shown in the viewer's own time zone (built from the ISO timestamp `at`) ----

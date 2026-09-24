@@ -5,13 +5,17 @@ import { useShipments } from "@/lib/useShipments";
 import { shipment } from "@/test/fixtures";
 import Shipments from "@/components/Shipments";
 
+let query = "";
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(query) }));
 vi.mock("@/lib/useShipments", () => ({ useShipments: vi.fn() }));
+vi.mock("@/components/Emails", () => ({ default: ({ voyage }: { voyage?: string }) => <main>emails:{voyage}</main> }));
 
 const state = (shipments: Shipment[], loadState: "loading" | "ready" | "error" = "ready") =>
   vi.mocked(useShipments).mockReturnValue({ shipments, loadState, setShipments: vi.fn(), busy: { current: false } });
 const names = () => [...document.querySelectorAll(".ship-name")].map((n) => n.textContent);
 
 afterEach(() => {
+  query = "";
   vi.restoreAllMocks();
 });
 
@@ -31,7 +35,15 @@ describe("Shipments", () => {
     const [first] = document.querySelectorAll(".ship");
     expect(first.querySelector(".ship-meta")!.textContent).toMatch(/^2 emails/);
     expect(first.querySelector(".status")!.textContent).toBe("1 Needs Review");
-    expect([...first.querySelectorAll(".ship-emails a")].map((a) => a.getAttribute("href"))).toEqual(["/emails?open=email_002", "/emails?open=email_001"]);
+    expect(first.getAttribute("href")).toBe("/shipments?voyage=NAP%20914%20V.BS007");
+  });
+
+  it("shows one voyage's page when the address names a voyage", () => {
+    query = "voyage=NAP+914+V.BS007";
+    state(emails);
+    render(<Shipments />);
+    expect(screen.getByRole("main").textContent).toBe("emails:NAP 914 V.BS007");
+    expect(document.querySelector(".ships")).toBeNull();
   });
 
   it("searches by vessel or voyage", () => {

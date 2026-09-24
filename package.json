@@ -9,6 +9,7 @@
     "hash-password": "node -e \"const c = require('node:crypto'), salt = c.randomBytes(16).toString('hex'); console.log(salt + ':' + c.scryptSync(process.argv[1], salt, 64).toString('hex'))\""
   },
   "dependencies": {
+    "globe.gl": "^2.46.2",
     "next": "^16.3.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

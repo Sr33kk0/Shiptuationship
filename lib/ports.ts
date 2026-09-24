@@ -1,3 +1,5 @@
+import type { Shipment } from "./shipments";
+
 // Turns a port string such as "NANTONG, CHINA (CNNTG)" into an ISO country code for the map.
 // Uses the UN/LOCODE in brackets when there is one (its first two letters are the country), otherwise the
 // country name after the last comma, otherwise the whole text ("SINGAPORE").
@@ -64,3 +66,39 @@ export function countByCountry(values: (string | null | undefined)[]) {
   const rows: CountryCount[] = [...m].map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
   return { rows, placed, unplaced };
 }
+
+// ---- a voyage's legs, for the globe ----------------------------------------------------------------------
+
+export interface Leg {
+  pol: string; // the ports as the documents write them: "NANTONG, CHINA (CNNTG)"
+  pod: string;
+  emails: string[]; // ids of the emails that name this leg
+}
+
+/** A leg's id, the same however its ports are capitalised or padded. */
+export const legKey = (l: Pick<Leg, "pol" | "pod">) => `${l.pol}>${l.pod}`.toUpperCase();
+
+// One colour per leg, the same on the globe, in its list and on the email filter: the dashboard's series colours first
+// (TopBars, CategoryChart), then more. ponytail: colours repeat after 8 legs; no voyage has more than 2 today.
+const LEG_COLORS = ["#60a5fa", "#c084fc", "#fbbf24", "#fb7185", "#34d399", "#f97316", "#2dd4bf", "#a3e635"];
+export const legColor = (i: number) => LEG_COLORS[i % LEG_COLORS.length];
+
+// The legs a voyage sails, one per distinct port of loading -> port of discharge. Comparisons count only once validated
+// (their ports are then confirmed on both the SI and the BL); other emails count whenever they carry both ports.
+export function voyageLegs(emails: Shipment[]): Leg[] {
+  const legs = new Map<string, Leg>();
+  for (const s of emails) {
+    if (s.category === "document-comparison" && s.status !== "clean") continue;
+    const f = s.extractedFields ?? s.referenceFields;
+    const [pol, pod] = [f?.pol.trim(), f?.pod.trim()];
+    if (!pol || !pod) continue;
+    const key = legKey({ pol, pod });
+    const leg = legs.get(key) ?? { pol, pod, emails: [] };
+    leg.emails.push(s.id);
+    legs.set(key, leg);
+  }
+  return [...legs.values()];
+}
+
+/** "JAWAHARLAL NEHRU (NHAVA SHEVA), INDIA (INNSA)" → "JAWAHARLAL NEHRU (NHAVA SHEVA)": the port without its country or code. */
+export const portName = (raw: string) => raw.split(",")[0].replace(/\s*\([A-Z0-9]{5}\)\s*$/i, "").trim();

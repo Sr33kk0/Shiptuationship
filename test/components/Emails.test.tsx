@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { SetStateAction } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { legKey, type Leg } from "@/lib/ports";
 import type { Shipment } from "@/lib/shipments";
 import { useShipments } from "@/lib/useShipments";
-import { shipment } from "@/test/fixtures";
+import { fields, shipment } from "@/test/fixtures";
 import Emails from "@/components/Emails";
 import { ModeratorProvider } from "@/components/Profile";
 
@@ -12,15 +13,27 @@ vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(q
 vi.mock("@/lib/useShipments", () => ({ useShipments: vi.fn() }));
 const toast = vi.fn();
 vi.mock("@/components/Shell", () => ({ useToast: () => toast }));
+// the globe's leg list, as one button per leg
+vi.mock("@/components/VoyageGlobe", () => ({
+  default: ({ legs, onSelect }: { legs: Leg[]; onSelect: (key: string) => void }) => (
+    <section className="voyage-map">
+      {legs.map((l) => (
+        <button key={legKey(l)} onClick={() => onSelect(legKey(l))}>
+          {l.emails.join(",")}
+        </button>
+      ))}
+    </section>
+  ),
+}));
 
 let rows: Shipment[];
 const busy = { current: false };
 const setShipments = vi.fn((next: SetStateAction<Shipment[]>) => {
   rows = typeof next === "function" ? next(rows) : next;
 });
-const mount = (loadState: "loading" | "ready" | "error" = "ready", role: "moderator" | "auditor" = "moderator") => {
+const mount = (loadState: "loading" | "ready" | "error" = "ready", role: "moderator" | "auditor" = "moderator", voyage?: string) => {
   vi.mocked(useShipments).mockImplementation(() => ({ shipments: rows, setShipments, loadState, busy }));
-  return render(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho", role }}><Emails /></ModeratorProvider>);
+  return render(<ModeratorProvider value={{ id: "DanielHo", name: "Daniel Ho", role }}><Emails voyage={voyage} /></ModeratorProvider>);
 };
 const ids = () => [...document.querySelectorAll("tbody tr td.id")].map((td) => td.textContent);
 const tab = (name: RegExp) => within(document.querySelector(".filters") as HTMLElement).getByRole("link", { name });
@@ -282,5 +295,39 @@ describe("Emails paging and export", () => {
     rows = [];
     mount();
     expect((screen.getByRole("button", { name: "Export CSV" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("Voyage page", () => {
+  it("shows the voyage's route and only its emails, with tabs that stay on the voyage", () => {
+    rows[0] = { ...rows[0], vessel: "NAP 914", voyage: "BS007" };
+    rows[2] = { ...rows[2], vessel: "NAP 914", voyage: "BS007" };
+    rows[1] = { ...rows[1], vessel: "NAP 914", voyage: "BS008" };
+    mount("ready", "moderator", "NAP 914 V.BS007");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("NAP 914 V.BS007");
+    expect(screen.getByRole("link", { name: "Shipments" }).getAttribute("href")).toBe("/shipments");
+    expect(document.querySelector(".voyage-map")!.textContent).toBe("email_001"); // email_010 needs review, so it draws no leg
+    expect(ids()).toEqual(["email_010", "email_001"]);
+    expect(tab(/^All/).textContent).toBe("All (2)");
+    expect(tab(/Invoices/).getAttribute("href")).toBe("/shipments?voyage=NAP+914+V.BS007&view=invoice");
+    expect(sub(/Validated/).getAttribute("href")).toBe("/shipments?voyage=NAP+914+V.BS007&status=validated");
+  });
+
+  it("narrows the emails to the leg picked beside the globe, and shows them all again", () => {
+    const voyage = { vessel: "NAP 914", voyage: "BS007" };
+    rows = [
+      shipment({ ...voyage, id: "email_001", at: "2026-03-05T09:00:00.000Z" }),
+      shipment({ ...voyage, id: "email_002", at: "2026-03-06T09:00:00.000Z", extractedFields: fields({ pod: "Long Beach, USA (USLGB)" }) }),
+      shipment({ ...voyage, id: "email_003", at: "2026-03-07T09:00:00.000Z", category: "general", extractedFields: null, referenceFields: null }),
+    ];
+    mount("ready", "moderator", "NAP 914 V.BS007");
+    expect(ids()).toEqual(["email_003", "email_002", "email_001"]);
+    fireEvent.click(screen.getByRole("button", { name: "email_002" }));
+    expect(ids()).toEqual(["email_002"]);
+    expect(tab(/^All/).textContent).toBe("All (1)");
+    expect(screen.getAllByRole("button", { name: /email_/ })).toHaveLength(2); // the globe still lists every leg
+    fireEvent.click(screen.getByRole("button", { name: "Clear the leg filter Port Klang to Long Beach" }));
+    expect(ids()).toEqual(["email_003", "email_002", "email_001"]);
+    expect(document.querySelector(".leg-filter")).toBeNull();
   });
 });
