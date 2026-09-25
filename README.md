@@ -176,7 +176,7 @@ Shiptuationship has **two halves** that share one database:
    1. Parses the email JSON and **classifies** it (LLM, strict JSON, validated).
    2. Logs the email to Firestore (`emails/{email_id}`) with its classification.
    3. For **Document-Comparison Requests**: finds each attachment in Drive (a missing file is retried for up to 3 minutes before failing), parses it by type (TXT / PDF / XLSX / DOCX), sends a scanned PDF through **Google Vision OCR** if it has too little extracted text, asks the LLM to **extract the 7 fields** and to say whether it is an **SI or a BL**, then stores the result under `si` and `bl`.
-   4. Runs a **deterministic comparison** in code and writes `comparison`, `status` (`cleared` / `flagged` / `incomplete`) and `human_review_required`.
+   4. For **Document-Comparison Requests** only: runs a **deterministic comparison** in code and writes `comparison`, `status` (`cleared` / `flagged` / `incomplete`) and `human_review_required`. Other emails get no `comparison`, even with both an SI and a BL attached.
 6. The queue row is marked `done` or `failed` (with `last_error`).
 7. **The web app** reads `emails` through its own API routes. An operator opens a flagged email, sees the SI and BL side by side, corrects a value if the extraction was wrong, and saves.
 8. The save is written as a **moderator override** (never touching what n8n wrote), the comparison is re-run, and an **activity record** is added, which feeds the **User Log**. The n8n side feeds the **System Log**.

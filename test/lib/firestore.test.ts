@@ -221,6 +221,17 @@ describe("toShipment", () => {
     ]);
     expect(s.auditTrail[0].time).toBe("5 Mar 2026, 01:00");
   });
+
+  it("ignores a comparison stamp on an email that is not a comparison request", async () => {
+    const { toShipment } = await load();
+    const s = toShipment({
+      classification: "General Messages",
+      classified_at: "2026-03-05T01:00:00Z",
+      status: "pending",
+      comparison: { performed_at: "2026-03-05T02:00:00Z", status: "incomplete" },
+    });
+    expect(s.auditTrail.map((t) => t.action)).toEqual(["Classified as General Messages"]);
+  });
 });
 
 describe("listEmails", () => {
@@ -288,8 +299,9 @@ describe("listEmails", () => {
 describe("listAuditLog", () => {
   const emails = {
     documents: [
-      fsDoc(DOC, { email_id: "email_001", subject: "First", classified_at: "2026-03-05T01:00:00Z", classification: "Spam" }),
-      fsDoc(`${DOC}b`, { email_id: "email/2", subject: "Second", classified_at: "2026-03-05T03:00:00Z", classification: "Invoice Queries", comparison: { performed_at: "2026-03-05T04:00:00Z", status: "flagged" } }),
+      // Older workflow runs stamped a comparison on every email; only a comparison request was compared.
+      fsDoc(DOC, { email_id: "email_001", subject: "First", classified_at: "2026-03-05T01:00:00Z", classification: "Spam", comparison: { performed_at: "2026-03-05T02:00:00Z", status: "incomplete" } }),
+      fsDoc(`${DOC}b`, { email_id: "email/2", subject: "Second", classified_at: "2026-03-05T03:00:00Z", classification: "Document-Comparison Request", comparison: { performed_at: "2026-03-05T04:00:00Z", status: "flagged" } }),
     ],
   };
 
@@ -299,7 +311,7 @@ describe("listAuditLog", () => {
     const events = await listAuditLog("system");
     expect(events.map((e) => [e.id, e.kind, e.detail])).toEqual([
       ["email/2:compared", "compared", "flagged"],
-      ["email/2:classified", "classified", "Invoice Queries"],
+      ["email/2:classified", "classified", "Document-Comparison Request"],
       ["email_001:classified", "classified", "Spam"],
     ]);
     expect(events[0]).toMatchObject({ actor: "n8n Workflow", bot: true, subject: "Second", outcome: "", changes: [], fields: [] });

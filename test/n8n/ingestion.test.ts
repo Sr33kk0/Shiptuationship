@@ -27,15 +27,15 @@ describe("Compare Fields", () => {
   const compare = async (over: Record<string, unknown> = {}) => {
     const { json } = await run(email(over));
     const f = json.firestore_document.fields;
-    const cmp = f.comparison.mapValue.fields;
+    const cmp = f.comparison?.mapValue.fields;
     return {
       emailId: json.email_id,
       status: f.status.stringValue,
       review: f.human_review_required.booleanValue,
       reasons: f.human_review_reasons.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
-      comparison: cmp.status.stringValue,
-      discrepancies: cmp.discrepancies.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
-      notes: cmp.formatting_notes.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
+      comparison: cmp?.status.stringValue,
+      discrepancies: cmp?.discrepancies.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
+      notes: cmp?.formatting_notes.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
       field: (name: string) => plain(cmp.fields.mapValue.fields[name].mapValue.fields),
     };
   };
@@ -97,9 +97,14 @@ describe("Compare Fields", () => {
     expect(r.reasons).toEqual(["Bill of Lading is missing or could not be extracted. Supply a readable BL and reprocess the email."]);
   });
 
-  it("leaves other emails without documents as they were", async () => {
+  it("leaves other emails without documents as they were, with no comparison", async () => {
     const r = await compare({ classification: "Invoice Queries", bl: null, si: null, status: "pending" });
-    expect(r).toMatchObject({ status: "pending", review: false, comparison: "incomplete", reasons: [] });
+    expect(r).toMatchObject({ status: "pending", review: false, comparison: undefined, reasons: [] });
+  });
+
+  it("does not compare other emails even when both documents were extracted", async () => {
+    const r = await compare({ classification: "General Messages", si: { ...bl, container_count: 4 } });
+    expect(r).toMatchObject({ status: "pending", review: false, comparison: undefined, reasons: [] });
   });
 
   it("sends ingestion problems to review", async () => {
