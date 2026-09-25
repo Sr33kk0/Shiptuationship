@@ -198,7 +198,7 @@ describe("ingestion review alert", () => {
     expect(w.connections["Write Comparison"].main[0]!.map((t) => t.node)).toEqual(["Build Review Alert"]);
     expect(w.connections["Build Review Alert"].main[0]!.map((t) => t.node)).toEqual(["Send Review Alert", "Send Discord Review Alert"]);
     for (const name of ["Send Review Alert", "Send Discord Review Alert"]) expect(w.nodes.find((n) => n.name === name)).toMatchObject({ onError: "continueRegularOutput" });
-    expect(w.nodes.find((n) => n.name === "Send Review Alert")!.parameters.additionalFields).toMatchObject({ parse_mode: "Markdown" });
+    expect(w.nodes.find((n) => n.name === "Send Review Alert")!.parameters.additionalFields).toEqual({ appendAttribution: false });
   });
 
   it("Build Review Alert sends one message per email that needs review", async () => {
