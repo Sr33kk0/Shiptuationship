@@ -113,6 +113,10 @@ function toFields(map: unknown): Fields | null {
   return Object.fromEntries(FIELDS.map((f) => [f.key, str(m[FIRESTORE_KEYS[f.key]])])) as Fields;
 }
 
+// Only a comparison request is compared. Older workflow runs stamped an "incomplete" comparison on every email, so ignore it elsewhere.
+const comparisonOf = (doc: Doc) =>
+  doc.classification === "Document-Comparison Request" ? (doc.comparison as Doc | undefined) : undefined;
+
 // "si+bl" (how a review records which documents it changed) → "SI & BL"
 const sidesLabel = (v: unknown) => str(v).toUpperCase().replace("+", " & ");
 
@@ -174,7 +178,7 @@ export function toShipment(doc: Doc): Shipment {
 
   const review = doc.review as Doc | undefined;
   const read = doc.read_status as Doc | undefined;
-  const comparison = (doc.comparison as Doc | undefined) ?? {};
+  const comparison = comparisonOf(doc) ?? {};
   const cmpFields = (comparison.fields as Record<string, Doc> | undefined) ?? {};
   const byFsKey = Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], f])) as Record<string, (typeof FIELDS)[number]>;
 
@@ -307,7 +311,7 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
         { label: "Attachments", value: ((e.attachments as string[] | undefined) ?? []).join(", ") || "None" },
         ...(e.classification_error ? [{ label: "Classifier error", value: str(e.classification_error) }] : []),
       ] });
-      const cmp = e.comparison as Doc | undefined;
+      const cmp = comparisonOf(e);
       if (cmp?.performed_at) events.push({ ...base, id: `${emailId}:compared`, at: str(cmp.performed_at), kind: "compared", detail: str(cmp.status), ...comparisonDetail(e) });
     }
     return events.sort((a, b) => b.at.localeCompare(a.at));
