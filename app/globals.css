@@ -431,6 +431,9 @@ tbody tr:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .doc-pane { position: relative; flex: 1; background: var(--pane); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 /* Reset to Original / Save Changes for both documents, bottom right of the review */
 .doc-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 24px; background: var(--surface); border-top: 1px solid var(--line); flex-shrink: 0; }
+/* the Audit Log pane: this email's user and system log, in the same feed as the Audit Log pages */
+.modal-log { flex: 1; min-height: 0; overflow-y: auto; }
+.modal-log .log { max-width: 960px; margin: 0 auto; padding: 8px 0 24px; }
 /* asks before unsaved edits are thrown away (closing, or stepping to another email) */
 .confirm-back { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fade-in 0.15s ease-out; }
 .confirm { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 24px; }
@@ -672,6 +675,10 @@ a.chip svg:last-child { color: var(--faint); }
   .page-buttons button span { display: none; }
   .page-buttons button { width: 38px; justify-content: center; padding: 6px; }
 
+  /* review modal: Print and close on one row, the pane tabs (up to three) full width below them */
+  .modal-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+  .modal-actions .seg { order: 1; flex: 1 1 100%; }
+  .modal-actions .seg button { flex: 1 1 auto; }
 }
 
 /* touch screens: comfortable tap targets, and 16px form text so iOS Safari does not zoom the page when a field is focused */

@@ -35,6 +35,14 @@ describe("GET /api/audit", () => {
     }
   });
 
+  it("returns both logs for one email, newest first", async () => {
+    list.mockImplementation(async (source) => (source === "user" ? [{ id: "u", at: "2026-03-05T02:00:00Z" }] : [{ id: "s1", at: "2026-03-05T03:00:00Z" }, { id: "s2", at: "2026-03-05T01:00:00Z" }]) as never);
+    const res = await get("?email=email%2F2");
+    expect(res.status).toBe(200);
+    expect((await res.json()).map((e: { id: string }) => e.id)).toEqual(["s1", "u", "s2"]);
+    expect(list.mock.calls).toEqual([["user", "email/2"], ["system", "email/2"]]);
+  });
+
   it("reports a Firestore failure as 502", async () => {
     list.mockRejectedValue(new Error("Firestore 500: down"));
     const res = await get("?source=user");

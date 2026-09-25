@@ -7,10 +7,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1856,
-        3328
+        -240,
+        5088
       ],
-      "id": "b89a977a-7a67-470a-9c17-a5030778a621",
+      "id": "bd22e5b8-ec6b-47c9-a61c-d257b4a36b2f",
       "name": "Build Vision Request1",
       "onError": "continueErrorOutput"
     },
@@ -36,10 +36,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2096,
-        3328
+        0,
+        5088
       ],
-      "id": "4ac5809f-2aaf-48ee-b8a4-2fabb755e684",
+      "id": "39e1008c-e5d7-480a-bbdd-fe145eac178d",
       "name": "Google Vision OCR1",
       "notesInFlow": true,
       "credentials": {
@@ -58,10 +58,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2336,
-        3328
+        240,
+        5088
       ],
-      "id": "a7d4b673-092a-4193-a963-219110a14f0b",
+      "id": "7b83c93c-b455-4f3a-8483-e378693adcdd",
       "name": "Collect OCR Text1",
       "onError": "continueErrorOutput"
     },
@@ -92,10 +92,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -192,
-        3408
+        -2288,
+        5168
       ],
-      "id": "62a0ebcd-3bd3-455d-94c4-c5b1ba8a3d46",
+      "id": "a2c09b30-a7cf-4bb9-8da1-7763c12c5fe0",
       "name": "Has Attachments?1",
       "notes": "Emails without attachments still reach final status processing."
     },
@@ -110,10 +110,10 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        -1184,
-        3632
+        -3280,
+        5392
       ],
-      "id": "1096da04-30e2-452d-aabc-45d48e9d0809",
+      "id": "bd0e4673-7e27-4f71-90cf-4cb343fd608e",
       "name": "Main Classifier",
       "alwaysOutputData": false,
       "continueOnFail": true
@@ -127,10 +127,10 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        2368,
-        3632
+        992,
+        5360
       ],
-      "id": "5e3d6345-742c-4aa4-ab32-d933929ed323",
+      "id": "1567cbab-6f16-4050-a7ec-2609149e5b8f",
       "name": "Field Normalise",
       "onError": "continueErrorOutput"
     },
@@ -147,10 +147,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        -1872,
-        3696
+        -3968,
+        5456
       ],
-      "id": "b6078ab2-0380-4266-99cd-5cac7367513d",
+      "id": "ee4d919a-f97d-4e13-806a-9e53da19abbf",
       "name": "Download file",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -167,10 +167,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        -1664,
-        3696
+        -3760,
+        5456
       ],
-      "id": "02316c4e-4502-496a-8328-365e296370da",
+      "id": "a61adb75-9e63-40f6-865e-dd217034f96a",
       "name": "Parse Email JSON"
     },
     {
@@ -186,10 +186,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        896,
-        3632
+        -1200,
+        5392
       ],
-      "id": "e1a48b97-f7f0-4a5d-9a3d-c1d3b2daf54a",
+      "id": "01b734b1-4cb9-4c30-ac9c-fad979fea7f1",
       "name": "Download File",
       "credentials": {
         "googleDriveOAuth2Api": {
@@ -226,10 +226,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        416,
-        3632
+        -1680,
+        5392
       ],
-      "id": "9ae8d70c-9b7c-43d1-a874-d7a06ee1d0af",
+      "id": "7a3de7cc-69f4-4582-adba-ba83efe61a03",
       "name": "Find Attachment",
       "alwaysOutputData": true,
       "credentials": {
@@ -248,10 +248,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        1376,
-        3312
+        -720,
+        5072
       ],
-      "id": "69427705-0b9a-46d3-b366-86bd21b1a891",
+      "id": "5e40bdc6-5497-4985-a40f-662e2f51e9c6",
       "name": "Parse TXT",
       "alwaysOutputData": true,
       "onError": "continueErrorOutput"
@@ -267,10 +267,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        1376,
-        3520
+        -720,
+        5280
       ],
-      "id": "86ee1825-1949-4eb6-9237-df5cec78d391",
+      "id": "f31024d9-4027-4d22-abf9-d6839d130fa3",
       "name": "Read PDF",
       "alwaysOutputData": true,
       "onError": "continueErrorOutput"
@@ -286,10 +286,10 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1.1,
       "position": [
-        1376,
-        3712
+        -720,
+        5472
       ],
-      "id": "2d5ae9ca-7b15-485a-a25a-a4bacde3ee6f",
+      "id": "e5c0b6fe-1f6b-425c-ad2c-ae6a82edb8e7",
       "name": "Read Excel",
       "alwaysOutputData": true,
       "notesInFlow": true,
@@ -420,10 +420,10 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        1136,
-        3632
+        -960,
+        5392
       ],
-      "id": "eb05590e-82aa-4d6e-bd6a-ec50fd993985",
+      "id": "deae5c66-33a5-45e4-beab-6c91df55d588",
       "name": "File Extension Categorization"
     },
     {
@@ -434,10 +434,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2128,
-        3632
+        720,
+        5376
       ],
-      "id": "350b31ec-0472-4e92-9d52-a9334688501e",
+      "id": "669477b3-4b4d-4228-aacf-b64b9817eb0d",
       "name": "Normalize & Tag Data",
       "retryOnFail": true,
       "waitBetweenTries": 5000,
@@ -451,10 +451,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2736,
-        3632
+        1360,
+        5360
       ],
-      "id": "6770858b-7113-4766-a73d-23b3569ad601",
+      "id": "597a9d42-7617-4f3e-80a9-722d501760f8",
       "name": "Re-attach Metadata",
       "retryOnFail": true,
       "waitBetweenTries": 5000,
@@ -482,10 +482,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3456,
-        3632
+        2080,
+        5360
       ],
-      "id": "c3613111-dd8b-4e43-ab18-5cb759161649",
+      "id": "71ef6efa-2bec-443c-a237-1ec3a570e8d8",
       "name": "Write to Firestore",
       "notesInFlow": true,
       "credentials": {
@@ -504,10 +504,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2976,
-        3632
+        1600,
+        5360
       ],
-      "id": "4bd05b34-355e-4f7a-80c1-9888ba73f715",
+      "id": "45c238c7-fa4c-4f6a-b7d1-92d942fdbbf5",
       "name": "Check Port Code",
       "notesInFlow": true,
       "retryOnFail": true,
@@ -523,10 +523,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3216,
-        3632
+        1840,
+        5360
       ],
-      "id": "a8ab1551-ac32-4756-910f-1fd1514a5dc8",
+      "id": "0a5d8ea4-b80d-4b3f-8a16-f26f2e7e0eae",
       "name": "Prepare for Firestore",
       "notesInFlow": true,
       "retryOnFail": true,
@@ -542,10 +542,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1424,
-        3632
+        -3520,
+        5392
       ],
-      "id": "4c7f2fb2-7dc8-4708-a927-93365cf1d4c4",
+      "id": "a6c6c3b9-5f8e-462b-a655-0c83b2c67e94",
       "name": "Normalize Email"
     },
     {
@@ -556,10 +556,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -544,
-        3632
+        -2640,
+        5392
       ],
-      "id": "bd91a099-27ce-43ec-9c2c-283ae67136e6",
+      "id": "e8214bef-5df6-49c1-841f-a4049ab43b74",
       "name": "Prepare Email Log"
     },
     {
@@ -584,10 +584,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -304,
-        3632
+        -2400,
+        5392
       ],
-      "id": "eb2d3354-8529-4b58-a2d1-a7c26a2eb96b",
+      "id": "87b192ad-278a-4398-9bef-273948b1c3a5",
       "name": "Log Email to Firestore",
       "notesInFlow": true,
       "credentials": {
@@ -605,10 +605,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -64,
-        3632
+        -2160,
+        5392
       ],
-      "id": "09743159-edea-4cdf-9b26-ed3f7ca462f7",
+      "id": "1e004d71-d97d-4b1c-91ef-e918fdb73d84",
       "name": "Expand Attachments"
     },
     {
@@ -620,10 +620,10 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        176,
-        3632
+        -1920,
+        5392
       ],
-      "id": "d652e8e6-4df8-4aad-9ba9-90bfb0ba3107",
+      "id": "69d9bde7-9cb9-4784-9599-9819a166ac5f",
       "name": "Loop Attachments"
     },
     {
@@ -633,10 +633,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        656,
-        3632
+        -1440,
+        5392
       ],
-      "id": "12d867e0-5218-4f8e-b019-d0fa9200fd6a",
+      "id": "1a79edb0-aacd-4365-bf67-036506737a7c",
       "name": "Validate Attachment Match",
       "onError": "continueErrorOutput"
     },
@@ -647,10 +647,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1616,
-        3712
+        -480,
+        5472
       ],
-      "id": "70bbc7bc-e417-4b76-bad3-ec0e8a101e21",
+      "id": "0daf7384-f270-4832-a915-7895a75aceb6",
       "name": "Combine Excel Rows",
       "onError": "continueErrorOutput"
     },
@@ -662,10 +662,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1376,
-        3888
+        -720,
+        5648
       ],
-      "id": "5b62250e-4fb7-4609-a32a-24735b7ed624",
+      "id": "888c0a91-3c5e-4fd3-b7e6-1a6ff4571bc2",
       "name": "DOCX as ZIP",
       "onError": "continueErrorOutput"
     },
@@ -674,10 +674,10 @@
       "type": "n8n-nodes-base.compression",
       "typeVersion": 1.1,
       "position": [
-        1616,
-        3888
+        -480,
+        5648
       ],
-      "id": "4325802e-23d2-454f-b1e0-ff7e6c84ae0c",
+      "id": "b91beef7-5248-435a-9c23-3d184233825c",
       "name": "Unzip DOCX",
       "alwaysOutputData": true,
       "onError": "continueErrorOutput"
@@ -689,10 +689,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1856,
-        3888
+        -240,
+        5648
       ],
-      "id": "fa92e59c-86c3-47be-924f-4a4923a8e54a",
+      "id": "fc6581bd-3803-4841-ac21-230187093952",
       "name": "Read DOCX Text",
       "onError": "continueErrorOutput"
     },
@@ -704,10 +704,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1376,
-        4048
+        -720,
+        5808
       ],
-      "id": "c9f79ccf-388f-4c4e-9262-0ed1463172a6",
+      "id": "6274aa08-d373-4095-a949-f8ee766b813b",
       "name": "Unsupported Attachment",
       "onError": "continueErrorOutput"
     },
@@ -719,10 +719,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2736,
-        4400
+        64,
+        5984
       ],
-      "id": "19a319d9-2ca1-4538-a5df-df64f38015da",
+      "id": "7bff17e3-7e81-4488-aa8b-78b93ea955b5",
       "name": "Prepare Attachment Error"
     },
     {
@@ -747,10 +747,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2976,
-        4400
+        304,
+        5984
       ],
-      "id": "5ce68596-398b-4b2d-93d5-71b7a15d00fd",
+      "id": "589d7790-a428-4918-b796-0e4c231c0005",
       "name": "Log Attachment Error",
       "notesInFlow": true,
       "credentials": {
@@ -769,10 +769,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -832,
-        3632
+        -2928,
+        5392
       ],
-      "id": "a7aa2a89-83f0-4043-94d0-613f477d6085",
+      "id": "3b4f9e3f-1ab4-4053-8efa-7784a9de74f7",
       "name": "Validate Classification"
     },
     {
@@ -787,10 +787,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        400,
-        3120
+        -1744,
+        4288
       ],
-      "id": "94254586-9196-4cbd-8589-424033915d8f",
+      "id": "ffbe77a5-fb56-4b47-accd-85e7787cf39f",
       "name": "Read Email Doc",
       "credentials": {
         "googleFirebaseCloudFirestoreOAuth2Api": {
@@ -807,10 +807,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        688,
-        3120
+        -1456,
+        4288
       ],
-      "id": "28d4afea-87e5-4ab4-baf8-a4598e1b21ce",
+      "id": "f2ed5459-c376-4ddf-9605-ed48237eb0eb",
       "name": "Compare Fields"
     },
     {
@@ -835,10 +835,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1008,
-        3120
+        -1136,
+        4288
       ],
-      "id": "a1c0b283-e0e7-4c6d-a2f4-810632273385",
+      "id": "a94d914b-b36e-481f-9603-6c0292266850",
       "name": "Write Comparison",
       "credentials": {
         "googleFirebaseCloudFirestoreOAuth2Api": {
@@ -874,10 +874,10 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1616,
-        3520
+        -480,
+        5280
       ],
-      "id": "0f28e870-9951-4090-a2f9-14607fbefc0b",
+      "id": "838075b0-7460-429e-8fa3-b4bb2b522f60",
       "name": "Needs OCR?",
       "notes": "Fewer than 50 extracted characters per page = image-only/scanned PDF. True -> Google Vision OCR, false -> normal path."
     },
@@ -895,10 +895,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleVertex",
       "typeVersion": 1,
       "position": [
-        -1200,
-        3824
+        -3296,
+        5584
       ],
-      "id": "c603f06b-b9be-410e-8d2e-91bd3d891a53",
+      "id": "f9286e2e-1ca5-42a2-b352-a5d88ce1c384",
       "name": "Google Vertex Chat Model2",
       "credentials": {
         "googleApi": {
@@ -921,10 +921,10 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleVertex",
       "typeVersion": 1,
       "position": [
-        2416,
-        3888
+        1040,
+        5616
       ],
-      "id": "a04b4b92-3e6f-4448-974a-d884b193718e",
+      "id": "f0feb768-00f1-40ac-9037-9a91e0404223",
       "name": "Google Vertex Chat Model3",
       "credentials": {
         "googleApi": {
@@ -940,10 +940,10 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -2064,
-        3712
+        -4160,
+        5472
       ],
-      "id": "4ebbaa1d-cb1d-4c2b-ad42-4308166e6ebc",
+      "id": "50b58291-470e-4b79-8323-a622ea15ceff",
       "name": "Start"
     },
     {
@@ -973,10 +973,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        1136,
-        4224
+        -960,
+        5984
       ],
-      "id": "e199b6aa-ae95-4767-b034-452e339bb1cd",
+      "id": "4faf671d-4761-462a-9b5d-3b7b72d8a670",
       "name": "Find Attachment (Retry)",
       "alwaysOutputData": true,
       "credentials": {
@@ -994,10 +994,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1376,
-        4224
+        -720,
+        5984
       ],
-      "id": "88f5825c-b36f-4729-84ce-b5ecf26656e0",
+      "id": "3631d9c3-3a8d-4a6f-b13c-f361d97ece29",
       "name": "Validate Attachment Match (Retry)",
       "onError": "continueErrorOutput"
     },
@@ -1008,10 +1008,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        416,
-        4224
+        -1680,
+        5984
       ],
-      "id": "94a59e17-a0f7-41c4-b2c0-8b56f4520e2c",
+      "id": "bf7525c2-5340-4fae-989a-589d332de0c9",
       "name": "Build Retry Attempts",
       "onError": "continueErrorOutput"
     },
@@ -1024,10 +1024,10 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        656,
-        4224
+        -1440,
+        5984
       ],
-      "id": "d3a0a565-c2b9-4876-afcf-0a39f436820f",
+      "id": "e89878e5-1929-406d-9e84-fc8fe7289916",
       "name": "Retry Loop",
       "notes": "One pass per attempt item. Loop output = try again after a wait; done output = attempts exhausted, log error."
     },
@@ -1038,10 +1038,10 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        896,
-        4224
+        -1200,
+        5984
       ],
-      "id": "8631628d-d686-43f2-acd4-633cfc8ef00b",
+      "id": "3344968b-4fe7-4a59-bf76-54eb13e7bc3f",
       "name": "Wait 30 Seconds",
       "webhookId": "b6a8da84-07a0-4d36-9e84-65b06bb10957"
     },
@@ -1052,10 +1052,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1376,
-        3120
+        -720,
+        4880
       ],
-      "id": "125acac8-cad2-4aeb-8d3a-22c54571f102",
+      "id": "f1d398ee-d203-4e96-bd0d-1401bcb38019",
       "name": "Build Image Vision Request",
       "onError": "continueErrorOutput"
     },
@@ -1081,10 +1081,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1616,
-        3120
+        -480,
+        4880
       ],
-      "id": "8551e744-7ca7-484a-8a46-8c193a542d5f",
+      "id": "acc95f80-6bdd-4773-8401-831b625e4a3c",
       "name": "Google Vision Image OCR",
       "notesInFlow": true,
       "credentials": {
@@ -1103,29 +1103,29 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1856,
-        3120
+        -240,
+        4880
       ],
-      "id": "473cfc39-dc89-4f3e-8825-358257996010",
+      "id": "c5394860-132a-456d-8cb4-ee05f4b31d42",
       "name": "Collect Image OCR Text",
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Write Comparison runs once per attachment (Loop Attachments' done branch), so alert once per email.\n// Its PATCH response is the whole email doc, and Compare Fields has just set human_review_required.\nconst f = $input.first().json.fields ?? {};\nif (f.human_review_required?.booleanValue !== true) return [];\nconst s = k => f[k]?.stringValue ?? '';\nconst reasons = (f.human_review_reasons?.arrayValue?.values ?? []).map(v => '• ' + v.stringValue);\nconst text = [\n  '⚠️ Email needs human review',\n  `From: ${s('from')}`,\n  `Subject: ${s('subject')}`,\n  `Category: ${s('classification')}`,\n  ...reasons,\n  '',\n  'https://shiptuationship.vercel.app/emails',\n]\n  .join('\\n')\n  .replace(/@/g, '@\\u200b') // sender-controlled text: stop a subject pinging @everyone on Discord\n  .slice(0, 1900); // Discord caps messages at 2000 chars, and one attachment error alone can be 2000\nreturn [{ json: { text } }];"
+        "jsCode": "// Write Comparison runs once per attachment (Loop Attachments' done branch), so alert once per email.\n// Its PATCH response is the whole email doc, and Compare Fields has just set human_review_required.\nconst f = $input.first().json.fields ?? {};\nif (f.human_review_required?.booleanValue !== true) return [];\n// Markdown for Telegram (legacy mode) and Discord alike. Field values are monospace so 20_01_2026 is not italicised.\nconst code = k => '`' + ((f[k]?.stringValue ?? '').replace(/`/g, \"'\") || '-') + '`';\nconst esc = t => t.replace(/[_*`[]/g, '\\\\$&');\nconst reasons = (f.human_review_reasons?.arrayValue?.values ?? []).map(v => '• ' + esc(v.stringValue ?? ''));\nconst text = [\n  '[⚠️ Human Review Required](https://shiptuationship.vercel.app/emails)',\n  '',\n  `From: ${code('from')}`,\n  `Subject: ${code('subject')}`,\n  `Category: ${code('classification')}`,\n  ...reasons,\n]\n  .join('\\n')\n  .replace(/@/g, '@\\u200b') // sender-controlled text: stop a subject pinging @everyone on Discord\n  .slice(0, 1900) // Discord caps messages at 2000 chars, and one attachment error alone can be 2000\n  .replace(/\\\\$/, ''); // the cut can split an escape and leave a dangling backslash\nreturn [{ json: { text } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1296,
-        2864
+        -768,
+        4288
       ],
-      "id": "3512ab26-feea-403a-8622-d1a2ec1d6922",
+      "id": "57ec5932-c071-48dc-aaf3-a061ffc10a5d",
       "name": "Build Review Alert"
     },
     {
       "parameters": {
-        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "chatId": "-1004353156350",
         "text": "={{ $json.text }}",
         "additionalFields": {
           "appendAttribution": false
@@ -1134,12 +1134,19 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1584,
-        2752
+        -480,
+        4176
       ],
-      "id": "5442aca2-8a81-4e3c-a7d1-3531d21c24ee",
+      "id": "a548a6a4-94c7-405e-b7e2-7c156cb0fb88",
       "name": "Send Review Alert",
       "notesInFlow": true,
+      "webhookId": "2c6bc8dc-b5fd-4be1-af05-17e91e59c687",
+      "credentials": {
+        "telegramApi": {
+          "id": "EUwYA5qu0n89t0Yw",
+          "name": "Telegram account"
+        }
+      },
       "onError": "continueRegularOutput",
       "notes": "Select your Telegram bot credential and set Chat ID. No parse mode: email subjects would break Markdown. Continues on error so a chat outage never fails ingestion."
     },
@@ -1166,20 +1173,84 @@
       "type": "n8n-nodes-base.discord",
       "typeVersion": 2,
       "position": [
-        1584,
-        2976
+        -480,
+        4400
       ],
-      "id": "8c6356d6-78b0-4d6c-a6cc-aa325d439baf",
+      "id": "dc550cd5-4f26-4f3e-bd95-90932011caec",
       "name": "Send Discord Review Alert",
       "notesInFlow": true,
-      "onError": "continueRegularOutput",
-      "notes": "Continues on error so a chat outage never fails ingestion.",
+      "webhookId": "bd523fe0-bed6-47f0-90e4-85401b787396",
       "credentials": {
         "discordBotApi": {
           "id": "2AnZIvLsQ1xgRPbA",
           "name": "Discord Bot account"
         }
-      }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Continues on error so a chat outage never fails ingestion."
+    },
+    {
+      "parameters": {
+        "content": "# Classification\n",
+        "height": 624,
+        "width": 2192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -4224,
+        5136
+      ],
+      "id": "13caff64-2cd3-4789-baba-3e3b5ce01707",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Extraction & OCR",
+        "height": 1408,
+        "width": 2416,
+        "color": "#7D1C34"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1952,
+        4784
+      ],
+      "id": "3d37c44c-ee59-4219-9b4d-403c0e44f052",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Normalization\n",
+        "height": 528,
+        "width": 1616,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        5248
+      ],
+      "id": "2d3c5f37-02f5-4eb4-9ec5-cbe1f52dbae4",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Comparison & Alerts\n",
+        "height": 464,
+        "width": 1520,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1792,
+        4128
+      ],
+      "id": "8c8d8141-9be6-406c-aacb-9672e9689e06",
+      "name": "Sticky Note3"
     }
   ],
   "connections": {
@@ -1737,6 +1808,17 @@
         ]
       ]
     },
+    "Write Comparison": {
+      "main": [
+        [
+          {
+            "node": "Build Review Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Needs OCR?": {
       "main": [
         [
@@ -1912,17 +1994,6 @@
         [
           {
             "node": "Prepare Attachment Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Write Comparison": {
-      "main": [
-        [
-          {
-            "node": "Build Review Alert",
             "type": "main",
             "index": 0
           }

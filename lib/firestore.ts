@@ -298,8 +298,9 @@ export async function listEmails(): Promise<Shipment[]> {
 // The two audit logs, read-only and newest first:
 //  "system": what the n8n workflow recorded on each email (classified / auto-compared), taken from the email documents;
 //  "user":   every moderator action, which saveModeratorAction writes to `emails/{id}/activity`.
-export async function listAuditLog(source: "user" | "system"): Promise<AuditEvent[]> {
-  const emails = await listEmailDocs();
+// With `emailId`, only that email's entries (the Audit Log pane of the email popup), read from that one email and its own activity.
+export async function listAuditLog(source: "user" | "system", emailId?: string): Promise<AuditEvent[]> {
+  const emails = emailId ? [(await loadEmail(emailId)).before] : await listEmailDocs();
   const events: AuditEvent[] = [];
 
   if (source === "system") {
@@ -320,7 +321,7 @@ export async function listAuditLog(source: "user" | "system"): Promise<AuditEven
   const [names, rows] = await Promise.all([
     listDocuments("moderators").then((documents) =>
       Object.fromEntries(documents.map((m) => [m.name.split("/").pop()!, str(decodeMap(m.fields ?? {}).display_name)]))),
-    listActivityDocs(),
+    emailId ? listDocuments(`emails/${encodeURIComponent(emailId)}/activity`) : listActivityDocs(),
   ]);
   const subject = new Map(emails.map((e) => [str(e.email_id), str(e.subject)]));
   const label = Object.fromEntries(FIELDS.map((f) => [FIRESTORE_KEYS[f.key], f.label]));
