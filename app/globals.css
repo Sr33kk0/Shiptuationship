@@ -834,6 +834,7 @@ a.chip svg:last-child { color: var(--faint); }
 .voyage-legs { flex: 1 1 240px; min-width: 0; }
 .voyage-canvas { position: absolute; inset: 0; cursor: grab; }
 .voyage-canvas:active { cursor: grabbing; }
+.globe-credit { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; text-align: center; font-size: 11px; line-height: 16px; color: var(--muted); pointer-events: none; } /* the ports are geocoded with Nominatim (lib/seaRoutes.ts) */
 .globe-port { width: 0; height: 0; pointer-events: none; }
 .globe-port::before { content: ""; position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 70%, transparent); } /* neutral: a port can start legs of several colours */
 .globe-port span { position: absolute; left: 10px; top: -9px; white-space: nowrap; font-size: 11px; line-height: 18px; font-weight: 700; color: var(--ink); padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--surface) 85%, transparent); }
