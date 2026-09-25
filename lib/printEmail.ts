@@ -19,6 +19,7 @@ table{width:100%;border-collapse:collapse}
 th,td{padding:5px 8px;border:1px solid #d1d5db;text-align:left;vertical-align:top;overflow-wrap:anywhere}
 thead th{background:#f3f4f6}
 .meta th{width:34mm;background:#f3f4f6}
+.cmp :is(th,td):last-child{width:1%;white-space:nowrap}
 tr{break-inside:avoid}
 .bad{background:#fff1f2;color:#be123c;font-weight:700}
 ul{margin:0;padding-left:18px}
@@ -52,7 +53,7 @@ function page(s: Shipment) {
   const reasons = s.reviewReasons.length ? `<h2>Human review required</h2><ul>${s.reviewReasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : "";
 
   const compare = cmp
-    ? `<h2>SI vs Draft BL</h2><table><thead><tr><th>Field</th><th>Customer SI</th><th>Carrier Draft BL</th><th>Result</th></tr></thead><tbody>${FIELDS.map((f) => {
+    ? `<h2>SI vs Draft BL</h2><table class="cmp"><thead><tr><th>Field</th><th>Customer SI</th><th>Carrier Draft BL</th><th>Result</th></tr></thead><tbody>${FIELDS.map((f) => {
         const unit = "unit" in f ? f.unit : "";
         const bad = cmp.si[f.key] !== cmp.bl[f.key] ? ' class="bad"' : "";
         return `<tr><td>${f.label}</td><td${bad}>${esc(cmp.si[f.key])}${unit}</td><td${bad}>${esc(cmp.bl[f.key])}${unit}</td><td${bad}>${bad ? "Mismatch" : "Match"}</td></tr>`;
