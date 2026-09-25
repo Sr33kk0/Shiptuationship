@@ -392,6 +392,18 @@ describe("listAuditLog", () => {
     expect(JSON.parse(String(query[1]!.body)).structuredQuery.from).toEqual([{ collectionId: "activity", allDescendants: true }]);
   });
 
+  it("reads only one email and its own activity when given an email", async () => {
+    const fetchMock = mockFetch(
+      at("/emails/email%2F2", emails.documents[1]),
+      at("/moderators", { documents: [fsDoc("projects/p/databases/(default)/documents/moderators/DanielHo", { display_name: "Daniel Ho" })] }),
+      at("/emails/email%2F2/activity", { documents: [fsDoc(`${BASE.slice(35)}/emails/email%2F2/activity/a1`, { moderator_id: "DanielHo", action: "marked_read", occurred_at: "2026-03-05T06:00:00Z" })] }),
+    );
+    const { listAuditLog } = await load();
+    expect((await listAuditLog("system", "email/2")).map((e) => e.id)).toEqual(["email/2:compared", "email/2:classified"]);
+    expect(await listAuditLog("user", "email/2")).toMatchObject([{ id: "email/2:a1", kind: "marked_read", actor: "Daniel Ho", subject: "Second" }]);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith(":runQuery") || new URL(String(u)).pathname.endsWith("/documents/emails"))).toBe(false);
+  });
+
   it("pages through activity in batches of 500", async () => {
     const row = (i: number) => ({ document: fsDoc(`x/emails/email_001/activity/a${i}`, { action: "marked_read", occurred_at: "2026-03-05T00:00:00Z" }) });
     const offsets: unknown[] = [];

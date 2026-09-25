@@ -92,6 +92,121 @@ function verb(e: AuditEvent) {
   return <>marked <b className="ev-id">{e.emailId}</b> as read</>;
 }
 
+// Placeholder rows while the log loads.
+const skeleton = (rows: number) =>
+  Array.from({ length: rows }, (_, i) => (
+    <li key={i} className="ev skel-row" aria-hidden="true">
+      <span className="skel ev-ph" />
+      <div className="ev-main">
+        <span className="skel" style={{ width: `${45 + ((i * 17) % 30)}%`, marginBottom: 8 }} />
+        <span className="skel" style={{ width: `${30 + ((i * 11) % 25)}%` }} />
+      </div>
+    </li>
+  ));
+
+// The entries of a log, each expandable to its details. Events arrive newest first, so a new day starts wherever the calendar day changes.
+function Entries({ events }: { events: AuditEvent[] }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (!n.delete(id)) n.add(id);
+      return n;
+    });
+  let lastDay = "";
+  return events.map((e, i) => {
+    const day = dayOf(e.at);
+    const divider = day !== lastDay ? ((lastDay = day), true) : false;
+    const kind = KINDS[e.kind];
+    const outcome = OUTCOME[e.kind === "review_saved" ? e.outcome : e.kind === "compared" ? e.detail : ""];
+    const expandable = toggleLabel(e);
+    const expanded = open.has(e.id);
+    return (
+      <li key={e.id} className="ev-item" style={{ "--d": `${Math.min(i, 14) * 0.03}s` } as React.CSSProperties}>
+        {divider && <div className="day"><span>{dayLabel(day)}</span></div>}
+        <div className="ev">
+          <div className="ev-avatar" style={e.bot ? undefined : ({ "--h": hue(e.actor) } as React.CSSProperties)} data-bot={e.bot || undefined}>
+            {e.bot ? <img src="/shiplogo.svg" alt="" /> : initials(e.actor)}
+            <span className="ev-badge" style={{ background: kind.color }} title={kind.label}>
+              <Icon d={kind.icon} size={10} sw={3} />
+            </span>
+          </div>
+          <div className="ev-main">
+            <div className="ev-top">
+              <span className="ev-who">
+                <b>{e.bot ? BOT_NAME : e.actor}</b>
+                {e.bot && <span className="bot">BOT</span>}
+              </span>
+              <span className="ev-text">{verb(e)}</span>
+              {outcome && <span className="ev-pill" style={{ color: outcome.c, background: outcome.bg }}>{outcome.label}</span>}
+              <time className="ev-time" dateTime={e.at} title={`${dayLabel(day)} ${clock(e.at)}`}>{clock(e.at)}</time>
+            </div>
+            {e.subject && <div className="ev-sub trunc">{e.subject}</div>}
+            {expandable && (
+              <button className="ev-toggle" onClick={() => toggle(e.id)} aria-expanded={expanded}>
+                <Icon d={expanded ? "chevD" : "chevR"} size={12} sw={2.4} />
+                {expandable}
+              </button>
+            )}
+            {expanded && !e.changes.length && (
+              <div className="ev-embed" style={{ "--k": kind.color } as React.CSSProperties}>
+                {!!e.facts?.length && (
+                  <dl className="ev-facts">
+                    {e.facts.map((f, j) => (
+                      <div key={j}>
+                        <dt>{f.label}</dt>
+                        <dd>{f.href ? <a href={f.href} target="_blank" rel="noreferrer">{f.value}</a> : f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {!!e.fields?.length && <Compared fields={e.fields} />}
+              </div>
+            )}
+            {expanded && !!e.changes.length && (
+              <dl className="ev-embed" style={{ "--k": kind.color } as React.CSSProperties}>
+                {e.changes.map((c) => (
+                  <div key={c.field}>
+                    <dt>{c.field}</dt>
+                    <dd>
+                      <del>{c.before || "empty"}</del>
+                      <span aria-hidden="true">→</span>
+                      <ins>{c.after || "empty"}</ins>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        </div>
+      </li>
+    );
+  });
+}
+
+// Everything people and Ship AI did to one email, newest first: the Audit Log pane of the email popup.
+// Loaded once per email (key it by the email); opening the pane again after an action loads it fresh.
+export function EmailAuditLog({ emailId }: { emailId: string }) {
+  const [events, setEvents] = useState<AuditEvent[] | "loading" | "error">("loading");
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/audit?email=${encodeURIComponent(emailId)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: AuditEvent[]) => alive && setEvents(data))
+      .catch(() => alive && setEvents("error"));
+    return () => {
+      alive = false;
+    };
+  }, [emailId]);
+  return (
+    <ol className="log" aria-label="Audit Log" aria-busy={events === "loading"}>
+      {events === "loading" && skeleton(4)}
+      {events === "error" && <li className="log-empty">Could not load the audit log from Firestore.</li>}
+      {Array.isArray(events) && (events.length ? <Entries events={events} /> : <li className="log-empty">No activity on this email yet.</li>)}
+    </ol>
+  );
+}
+
 export default function AuditLog({ source }: { source: AuditSource }) {
   const { title, blurb, kinds } = SOURCES[source];
   const params = useSearchParams();
@@ -99,7 +214,6 @@ export default function AuditLog({ source }: { source: AuditSource }) {
   const user = params.get("user") ?? "";
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [open, setOpen] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const list = useRef<HTMLDivElement>(null);
@@ -156,16 +270,6 @@ export default function AuditLog({ source }: { source: AuditSource }) {
     list.current?.scrollTo({ top: 0 });
   };
 
-  const toggle = (id: string) =>
-    setOpen((s) => {
-      const n = new Set(s);
-      if (!n.delete(id)) n.add(id);
-      return n;
-    });
-
-  // events arrive newest first, so a new day starts wherever the calendar day changes
-  let lastDay = "";
-
   return (
     <div className="scroll">
       <header className="page-head fade-up">
@@ -186,86 +290,10 @@ export default function AuditLog({ source }: { source: AuditSource }) {
 
         <div className="table-wrap" ref={list}>
           <ol className="log" key={`${source}|${action}|${user}`}>
-            {state === "loading" &&
-              Array.from({ length: 7 }, (_, i) => (
-                <li key={i} className="ev skel-row" aria-hidden="true">
-                  <span className="skel ev-ph" />
-                  <div className="ev-main">
-                    <span className="skel" style={{ width: `${45 + ((i * 17) % 30)}%`, marginBottom: 8 }} />
-                    <span className="skel" style={{ width: `${30 + ((i * 11) % 25)}%` }} />
-                  </div>
-                </li>
-              ))}
+            {state === "loading" && skeleton(7)}
             {state === "error" && <li className="log-empty">Could not load the audit log from Firestore.</li>}
             {state === "ready" && rows.length === 0 && <li className="log-empty">No log entries match your filters.</li>}
-            {paged.items.map((e, i) => {
-              const day = dayOf(e.at);
-              const divider = day !== lastDay ? ((lastDay = day), true) : false;
-              const kind = KINDS[e.kind];
-              const outcome = OUTCOME[e.kind === "review_saved" ? e.outcome : e.kind === "compared" ? e.detail : ""];
-              const expandable = toggleLabel(e);
-              const expanded = open.has(e.id);
-              return (
-                <li key={e.id} className="ev-item" style={{ "--d": `${Math.min(i, 14) * 0.03}s` } as React.CSSProperties}>
-                  {divider && <div className="day"><span>{dayLabel(day)}</span></div>}
-                  <div className="ev">
-                    <div className="ev-avatar" style={e.bot ? undefined : ({ "--h": hue(e.actor) } as React.CSSProperties)} data-bot={e.bot || undefined}>
-                      {e.bot ? <img src="/shiplogo.svg" alt="" /> : initials(e.actor)}
-                      <span className="ev-badge" style={{ background: kind.color }} title={kind.label}>
-                        <Icon d={kind.icon} size={10} sw={3} />
-                      </span>
-                    </div>
-                    <div className="ev-main">
-                      <div className="ev-top">
-                        <span className="ev-who">
-                          <b>{e.bot ? BOT_NAME : e.actor}</b>
-                          {e.bot && <span className="bot">BOT</span>}
-                        </span>
-                        <span className="ev-text">{verb(e)}</span>
-                        {outcome && <span className="ev-pill" style={{ color: outcome.c, background: outcome.bg }}>{outcome.label}</span>}
-                        <time className="ev-time" dateTime={e.at} title={`${dayLabel(day)} ${clock(e.at)}`}>{clock(e.at)}</time>
-                      </div>
-                      {e.subject && <div className="ev-sub trunc">{e.subject}</div>}
-                      {expandable && (
-                        <button className="ev-toggle" onClick={() => toggle(e.id)} aria-expanded={expanded}>
-                          <Icon d={expanded ? "chevD" : "chevR"} size={12} sw={2.4} />
-                          {expandable}
-                        </button>
-                      )}
-                      {expanded && !e.changes.length && (
-                        <div className="ev-embed" style={{ "--k": kind.color } as React.CSSProperties}>
-                          {!!e.facts?.length && (
-                            <dl className="ev-facts">
-                              {e.facts.map((f, j) => (
-                                <div key={j}>
-                                  <dt>{f.label}</dt>
-                                  <dd>{f.href ? <a href={f.href} target="_blank" rel="noreferrer">{f.value}</a> : f.value}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          )}
-                          {!!e.fields?.length && <Compared fields={e.fields} />}
-                        </div>
-                      )}
-                      {expanded && !!e.changes.length && (
-                        <dl className="ev-embed" style={{ "--k": kind.color } as React.CSSProperties}>
-                          {e.changes.map((c) => (
-                            <div key={c.field}>
-                              <dt>{c.field}</dt>
-                              <dd>
-                                <del>{c.before || "empty"}</del>
-                                <span aria-hidden="true">→</span>
-                                <ins>{c.after || "empty"}</ins>
-                              </dd>
-                            </div>
-                          ))}
-                        </dl>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
+            <Entries events={paged.items} />
           </ol>
         </div>
         <Pagination {...paged} total={rows.length} limit={limit} onPage={goToPage} onLimit={(size) => { setLimit(size); goToPage(1); }} />

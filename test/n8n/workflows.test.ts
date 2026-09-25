@@ -198,6 +198,7 @@ describe("ingestion review alert", () => {
     expect(w.connections["Write Comparison"].main[0]!.map((t) => t.node)).toEqual(["Build Review Alert"]);
     expect(w.connections["Build Review Alert"].main[0]!.map((t) => t.node)).toEqual(["Send Review Alert", "Send Discord Review Alert"]);
     for (const name of ["Send Review Alert", "Send Discord Review Alert"]) expect(w.nodes.find((n) => n.name === name)).toMatchObject({ onError: "continueRegularOutput" });
+    expect(w.nodes.find((n) => n.name === "Send Review Alert")!.parameters.additionalFields).toMatchObject({ parse_mode: "Markdown" });
   });
 
   it("Build Review Alert sends one message per email that needs review", async () => {
@@ -206,23 +207,27 @@ describe("ingestion review alert", () => {
     expect(await run(doc({}))).toEqual([]);
 
     const flagged = doc({
-      human_review_required: { booleanValue: true }, from: s("Ops <ops@x.com>"), subject: s("@everyone SI check"), classification: s("Document-Comparison Request"),
-      human_review_reasons: { arrayValue: { values: [s("Shipper: Values differ")] } },
+      human_review_required: { booleanValue: true }, from: s("Ops <ops@x.com>"), subject: s("@everyone SI `20_01_2026`"),
+      human_review_reasons: { arrayValue: { values: [s("Shipper: Values differ"), s("si_v2.pdf: *unreadable* [scan]")] } },
     });
     const out = await run([flagged, flagged]); // Write Comparison emits one item per attachment
     expect(out).toHaveLength(1);
     expect(out[0].json.text.split("\n")).toEqual([
-      "⚠️ Email needs human review",
-      "From: Ops <ops@​x.com>",
-      "Subject: @​everyone SI check",
-      "Category: Document-Comparison Request",
-      "• Shipper: Values differ",
+      "[⚠️ Human Review Required](https://shiptuationship.vercel.app/emails)",
       "",
-      "https://shiptuationship.vercel.app/emails",
+      "From: `Ops <ops@​x.com>`",
+      "Subject: `@​everyone SI '20_01_2026'`",
+      "Category: `-`",
+      "• Shipper: Values differ",
+      "• si\\_v2.pdf: \\*unreadable\\* \\[scan]",
     ]);
 
     const [long] = await run(doc({ human_review_required: { booleanValue: true }, human_review_reasons: { arrayValue: { values: [s("x".repeat(3000))] } } }));
     expect(long.json.text).toHaveLength(1900);
+    for (const pad of ["", "x"]) { // both parities, so the 1900 cut lands mid-escape once
+      const [cut] = await run(doc({ human_review_required: { booleanValue: true }, human_review_reasons: { arrayValue: { values: [s(pad + "_".repeat(3000))] } } }));
+      expect(cut.json.text).not.toMatch(/\\$/); // a split escape would break Telegram Markdown
+    }
   });
 });
 

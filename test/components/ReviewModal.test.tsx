@@ -48,12 +48,16 @@ describe("ReviewModal header", () => {
     expect(screen.getByText("Marked as read by Unknown reviewer · 20 Mar 2026, 19:00:00 MYT")).toBeTruthy();
   });
 
-  it("marks as read, and shows the read and saving states", () => {
+  it("marks as read from beside Save Changes, and shows the read and saving states", () => {
     const { rerender } = mount();
+    const foot = () => [...document.querySelectorAll(".doc-foot button")] as HTMLButtonElement[];
+    expect(foot().map((b) => b.textContent)).toEqual(["Reset to Original", "Save Changes", "Mark as Read"]);
+    expect(within(document.querySelector(".modal-actions")!).queryByRole("button", { name: "Mark as Read" })).toBeNull();
     fireEvent.click(button("Mark as Read"));
     expect(handlers.onMarkRead).toHaveBeenCalled();
     rerender(<ReviewModal shipment={shipment()} saving {...handlers} />);
-    expect((within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(foot()[2].textContent).toBe("Saving…");
+    expect(foot()[2].disabled).toBe(true);
     rerender(<ReviewModal shipment={shipment({ isRead: true })} saving={false} {...handlers} />);
     expect((button("Read") as HTMLButtonElement).disabled).toBe(true);
   });
@@ -164,7 +168,7 @@ describe("ReviewModal side-by-side review", () => {
     fireEvent.change(input(/Shipper/), { target: { value: "Typo" } });
     rerender(<ReviewModal shipment={shipment()} saving {...handlers} />);
     expect(input(/Shipper/).disabled).toBe(true);
-    expect((within(document.querySelector(".doc-foot") as HTMLElement).getByRole("button", { name: "Saving…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(document.querySelector(".doc-foot") as HTMLElement).getAllByRole("button", { name: "Saving…" }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     expect(resetButton().disabled).toBe(true);
   });
 
@@ -252,6 +256,49 @@ describe("ReviewModal plain email", () => {
   it("treats a comparison email without both documents as plain", () => {
     mount(shipment({ referenceFields: null }));
     expect(screen.getByRole("dialog", { name: "Email Transmission email_001" })).toBeTruthy();
+  });
+});
+
+describe("ReviewModal audit log", () => {
+  const log = (id: string) => [{ id: `${id}:classified`, at: "2026-03-20T09:16:00Z", kind: "classified", actor: "n8n Workflow", bot: true, emailId: id, subject: "", detail: "Spam", outcome: "", changes: [] }];
+  const tab = () => within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Audit Log" });
+
+  it("shows this email's log from the top row of every email, and goes back", async () => {
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(log(decodeURIComponent(url.split("email=")[1])))));
+    vi.stubGlobal("fetch", fetchMock);
+    for (const s of [shipment(), shipment({ category: "invoice", referenceFields: null, extractedFields: null })]) {
+      mount(s);
+      await act(async () => fireEvent.click(tab()));
+      expect(tab().getAttribute("aria-pressed")).toBe("true");
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/audit?email=email_001");
+      expect(screen.getByRole("list", { name: "Audit Log" }).textContent).toContain("classified email_001 as Spam");
+      expect(document.querySelector(".paper, .plain-card")).toBeNull();
+      fireEvent.click(within(document.querySelector(".modal-actions")!).getByRole("button", { name: "Read Email" }));
+      expect(document.querySelector(".email-card")).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("follows the email when stepping", async () => {
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(log(decodeURIComponent(url.split("email=")[1])))));
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = mount();
+    await act(async () => fireEvent.click(tab()));
+    await act(async () => rerender(<ReviewModal shipment={shipment({ id: "email/2" })} saving={false} {...handlers} />));
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/audit?email=email%2F2");
+    expect(screen.getByRole("list", { name: "Audit Log" }).textContent).toContain("classified email/2 as Spam");
+  });
+
+  it("explains an empty log and a failed load", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]")));
+    mount();
+    await act(async () => fireEvent.click(tab()));
+    expect(screen.getByText("No activity on this email yet.")).toBeTruthy();
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 502 })));
+    mount();
+    await act(async () => fireEvent.click(tab()));
+    expect(screen.getByText("Could not load the audit log from Firestore.")).toBeTruthy();
   });
 });
 

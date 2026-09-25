@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { CATS, FIELDS, fmtWhen, mismatches, type Edits, type FieldKey, type Fields, type Shipment, type Side } from "@/lib/shipments";
 import { printEmail } from "@/lib/printEmail";
+import { EmailAuditLog } from "./AuditLog";
 import { Icon } from "./Icon";
 
-type Pane = "preview" | "email";
+type Pane = "preview" | "email" | "log";
 
 function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
   return (
@@ -265,17 +266,16 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
               <Icon d="print" size={14} sw={2} />
               Print
             </button>
-            {isCmp && !readOnly && <button className="btn dark" disabled={saving || s.isRead} onClick={onMarkRead}>{s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}</button>}
-            {isCmp && (
-              <Seg
-                value={pane}
-                onChange={setPane}
-                options={[
-                  ["preview", "Side-by-Side Review"],
-                  ["email", "Read Email"],
-                ]}
-              />
-            )}
+            {/* every email has its Audit Log; a plain email has no side-by-side review, so its email counts as Read Email */}
+            <Seg
+              value={isCmp || pane === "log" ? pane : "email"}
+              onChange={setPane}
+              options={[
+                ...(isCmp ? [["preview", "Side-by-Side Review"] as [Pane, string]] : []),
+                ["email", "Read Email"],
+                ["log", "Audit Log"],
+              ]}
+            />
             <button className="close" onClick={close} aria-label="Close">
               <Icon d="x" sw={2} />
             </button>
@@ -297,7 +297,11 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
           </section>
         )}
 
-        {isCmp ? (
+        {pane === "log" ? (
+          <div className="modal-log">
+            <EmailAuditLog key={s.id} emailId={s.id} />
+          </div>
+        ) : isCmp ? (
           <div className="cmp">
             <div className="cmp-body">
               <div className="doc-pane">
@@ -326,6 +330,9 @@ export default function ReviewModal({ shipment: s, saving, onClose, onSave, onMa
                         <button className="btn dark" disabled={saving || !dirty.length} onClick={() => onSave(drafts)}>
                           <Icon d="check" size={14} sw={2.2} />
                           {saving ? "Saving…" : "Save Changes"}
+                        </button>
+                        <button className="btn dark" disabled={saving || s.isRead} onClick={onMarkRead}>
+                          {s.isRead ? "Read" : saving ? "Saving…" : "Mark as Read"}
                         </button>
                       </div>
                     )}
