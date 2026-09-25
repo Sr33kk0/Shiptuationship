@@ -211,6 +211,7 @@ function Globe({ routes, active, focus }: { routes: Route[]; active: string | nu
       <div ref={box} className="voyage-canvas" />
       {!globe && !failed && <div className="skel geo-skel" />}
       {failed && <p className="bars-empty geo-msg">Couldn&apos;t load the globe. Check your connection and reload.</p>}
+      {globe && <p className="globe-credit">Geocoding data provided by OpenStreetMap.</p>}
     </div>
   );
 }
