@@ -9,13 +9,6 @@
 **From a noisy shipping inbox to a clear discrepancy report.**
 Shiptuationship reads every incoming email, works out what it is, compares the Shipping Instruction (SI) against the draft Bill of Lading (BL) on seven fields, and hands anything uncertain to a human reviewer, with the evidence attached. Emails are grouped by vessel and voyage, with each voyage's sea route drawn on a 3D globe, and anything that needs a person is pushed to Telegram and Discord.
 
-| | |
-|---|---|
-| **Live app (Vercel)** | https://shiptuationship.vercel.app/ |
-| **Demo video** | https://youtu.be/eKVVBMr-v50 |
-| **Test it by email** | [Send a test email](mailto:syho81336.ho+ship@gmail.com?subject=Document%20check%20request) |
-| **Test it by upload** | [Drop a test file into the Drive `/inbox` and `/attachments` folder](https://drive.google.com/drive/folders/1LqdG7w1Sy2AvcCPYbrJbCBRO2JoWrTKK) |
-
 </div>
 
 <p align="center">
@@ -108,7 +101,7 @@ Success is measured by finding the **right requests** and the **right discrepanc
 | Visible failures and retries | Per-email queue with `queued → processing → done / failed`, `last_error` recorded. A missing attachment auto-retries for 3 minutes inside `ingestion`; a `failed` queue row still needs a manual retry. The daily report counts failed rows. | n8n `ingestion-drain`, `daily-report` |
 | "Which email, mismatch or not, what needs attention" | Dashboard, filterable email table, per-email discrepancy banner, per-voyage pages, audit logs with the field-by-field comparison. | Web app |
 
-> **Scanned PDFs and image attachments** are read with Google Vision OCR (see [5.3](#53-attachment-handling-and-field-extraction)); a scanned DOCX is not, and still surfaces as an attachment error for a human. See [Known limitations](#8-known-limitations) and the [roadmap](#9-future-roadmap).
+> **Scanned PDFs and image attachments** are read with Google Vision OCR (see [5.3](#53-attachment-handling-and-field-extraction)); a scanned DOCX is not, and still surfaces as an attachment error for a human. See [Known limitations](#8-known-limitations).
 
 ---
 
@@ -143,11 +136,11 @@ Shiptuationship has **two halves** that share one database:
 
 | Area | What you get |
 |------|--------------|
-| **Front page and login** | A product-style front page at `/`, which is always light; sections fade in as you scroll where the browser supports it. **Log in** checks your username and password against the `moderators` collection in Firestore and opens `/dashboard`. There is no sign-up: moderators and read-only auditors are added by hand (see [10.4](#104-getting-the-google-refresh-token-one-time)). Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. |
+| **Front page and login** | A product-style front page at `/`, which is always light; sections fade in as you scroll where the browser supports it. **Log in** opens `/login` (straight to `/dashboard` if you are already logged in), which checks your username and password against the `moderators` collection in Firestore and opens `/dashboard`. There is no sign-up: moderators and read-only auditors are added by hand (see [10.4](#104-getting-the-google-refresh-token-one-time)). Clicking your profile (top right, or the avatar on phones) opens a menu with **Log out**, which returns to the front page. |
 | **Dashboard** | Live counters (unread and read with a progress bar and per-category breakdown), **Total Comparison Requests** with one-click **Emails Cleared** and **Pending Validation** buttons, an interactive **Emails by Category** donut (click a slice to highlight it, click again to open those emails), **Top 3** shippers, consignees, notify parties and senders, and two **world heat maps** (outbound Port of Loading, inbound Port of Discharge). |
 | **Emails** | A Gmail-style inbox: unread rows are bold with a dot, three dropdown filters with live counts (**Category**: Comparisons / SI Requests / Invoices / General / Spam; **Status**: Needs Review / Validated; **Read/Unread**), search, date-range picker, sortable columns and CSV/JSON export. Every filter combination has its own URL (`/emails?view=invoice&status=validated&read=unread`), and `/emails?open=email_070` opens one email directly. Cards on phones and tablets. |
 | **Shipments** | Emails grouped by **vessel and voyage** (read from the subject or body, e.g. `NAP 914 V.BS007`), newest activity first, each showing its email count, route count and how many need review. A voyage's page (`/shipments?voyage=NAP%20914%20V.BS007`) opens with an interactive **3D globe** drawing the shortest sea route of every leg (Port of Loading → Port of Discharge) with its distance in nautical miles, then that voyage's emails. Pick a leg to see only its emails. |
-| **Review screen** | For comparison emails: the **SI and Draft BL side by side**, edited directly on the documents, with the differing fields in red on both. **Save Changes** (bottom right) saves both documents together with an automatic re-comparison; **Reset to Original** puts both back to what n8n extracted, before any human review (kept once saved). Closing the window or stepping to another email with unsaved edits asks first (*Keep Editing* / *Discard Changes*). Plus "Mark as read". A flagged email that is not a comparison (a classification error, a missing attachment) gets **Clear & Validate** instead. A **Read Email** view swaps the comparison for the original email (edits are kept). Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box. On phones the *Human review required* reasons fold away behind a chevron. |
+| **Review screen** | For comparison emails: the **SI and Draft BL side by side**, edited directly on the documents, with the differing fields in red on both. **Save Changes** (bottom right) saves both documents together with an automatic re-comparison; **Reset to Original** puts both back to what n8n extracted, before any human review (kept once saved). Closing the window or stepping to another email with unsaved edits asks first (*Keep Editing* / *Discard Changes*). Plus "Mark as read". A flagged email that is not a comparison (a classification error, a missing attachment) gets **Clear & Validate** instead. A **Read Email** view swaps the comparison for the original email (edits are kept), and an **Audit Log** tab lists everything the automation and moderators did to this one email, newest first. Round **‹ ›** buttons beside the window (and the left/right arrow keys) step to the previous or next email in the list as currently filtered and sorted. **Print** opens an A4 print preview in a new tab (save it as a PDF). Attachments that n8n stored a Drive link for (the SI and BL files) open in Google Drive. **Generate auto reply** shows a loading cogwheel, calls the n8n `auto-reply` workflow (Gemini via Vertex AI), and returns a real drafted reply into an editable, copyable box. On phones the *Human review required* reasons fold away behind a chevron. |
 | **User Log** | A chronological audit feed of every **moderator action** (reviews saved, emails cleared, emails marked read), with before/after field changes per document (SI and BL) you can expand. |
 | **System Log** | The same feed for everything the automation did, shown as **Ship AI** with the Shiptuationship logo as its avatar. Expand a *Classified* entry for the sender, attachments and any classifier error; expand an *Auto-comparison* for links to the SI and BL files, anything that blocked the check, and a **field-by-field table**: each value as written on the document, the normalised value that was compared, the UN/LOCODE verdict on ports, and the result (exact match, match after normalising, or mismatch). |
 | **Settings**  | Five colour schemes for the app: Light, Dark (true black), Ocean, Forest and Sunset, and an **Interface size** slider (75% to 200%) that scales text, buttons and spacing together. Both are remembered in the browser. The front page ignores them and is always light at 100%. |
@@ -206,7 +199,7 @@ Shiptuationship has **two halves** that share one database:
 | File storage | **Google Drive** | Dataset: `/inbox` emails and `/attachments` SI/BL files |
 | Comparison | **JavaScript (n8n Code node)**, deterministic | 7-field comparison with normalisation |
 | Hosting | **Google Cloud Run** (n8n), **Vercel** (web app) | Fully managed, 100% cloud native, scales on demand |
-| Tests | **Vitest**, **Testing Library**, **jsdom** | 464 tests across route handlers, components, libraries, the n8n workflow exports and `proxy.ts` |
+| Tests | **Vitest**, **Testing Library**, **jsdom** | 469 tests across route handlers, components, libraries, the n8n workflow exports and `proxy.ts` |
 
 ### 3.4 Data model (Firestore)
 
@@ -255,9 +248,10 @@ Vessel and voyage are **not stored**: the web app parses them from the subject (
 | `/api/emails/{id}/read` | `POST` | Mark an email as read (idempotent) |
 | `/api/emails/{id}/clear` | `POST` | Clear & validate a flagged email that is not an SI/BL comparison: sets `cleared`, drops its review flags and ingestion errors, logs the activity |
 | `/api/audit?source=user\|system` | `GET` | User Log (moderator activity) or System Log (n8n activity, with comparison details) |
+| `/api/audit?email=<id>` | `GET` | Both logs for one email, newest first (the review screen's **Audit Log** tab) |
 | `/api/auto-reply` | `POST` | Body `{ email: { id, subject, sender, body }, … }` (≤ 100 KB): forwards to the n8n `auto-reply` webhook (60 s timeout) and returns `{ body }`, the drafted reply. `503` if `N8N_AUTO_REPLY_WEBHOOK_URL` is not set |
 | `/api/sea-routes?from=<POL>&to=<POD>&…` | `GET` | Up to 20 port pairs: for each leg, both ports as `[lng, lat]` and the shortest sea route (`path`, `nm`). A port no map knows comes back `null` |
-| `/api/session` | `POST` / `DELETE` | Log in with body `{ email, password }` (`204` and a session cookie, or `401 {"error":"Wrong email or password"}`), log out |
+| `/api/session` | `POST` / `DELETE` | Log in with body `{ username, password }` (`204` and a session cookie, or `401 {"error":"Wrong username or password"}`), log out |
 
 Errors return `400` (bad input), `502` (Firestore, n8n or a map service unreachable), `404` (unknown email), `409` (conflict or precondition failed). Without a valid session cookie (see [5.4](#54-human-in-the-loop-the-web-app)) every `/api/*` route except `/api/session` returns `401 {"error":"Log in to continue"}`, and an auditor gets `403` on anything that is not `GET`/`HEAD`.
 
@@ -321,7 +315,7 @@ Six workflows are exported in [`n8n/`](n8n):
 | **`gmail-ship-to-drive`** | Schedule (1 min), optional. Polls Gmail for unlabelled `+ship` mail, uploads each message's attachments and a JSON manifest to Drive, then labels the message `ship-exported` so it is not re-read | one email |
 | **`ingestion-trigger`** | Schedule (1 min). Cursor = newest `created_time` in `ingestion_queue`. Asks Drive for the **20 oldest** files at or after it and writes one small queue document per file. Never runs the heavy workflow itself | ≤ 20 × 3 fields |
 | **`ingestion-drain`** | Schedule (1 min). Exits if another drain is still running, re-queues rows stuck in `processing`, reads ≤ 20 `queued` rows and loops them **one at a time**: claim → `ingestion` → mark `done` / `failed` | ≤ 20 sub-results, one email in flight |
-| **`ingestion`** | The actual pipeline for one email (51 nodes). Ends with a **review alert** to Telegram and Discord when the comparison needs a person (once per email; `@` is defused so a subject cannot ping `@everyone`, and the text is capped under Discord's 2,000 characters) | one email |
+| **`ingestion`** | The actual pipeline for one email (55 nodes). Ends with a **review alert** to Telegram and Discord when the comparison needs a person (once per email; `@` is defused so a subject cannot ping `@everyone`, and the text is capped under Discord's 2,000 characters) | one email |
 | **`auto-reply`** | Webhook, on demand. Called from `/api/auto-reply` with an email and its comparison result, drafts a reply with Gemini and returns it | one reply |
 | **`daily-report`** | Schedule, every day at **8:00 (Asia/Kuala_Lumpur)**. Reads Firestore and sends a fixed-format summary to **Telegram and Discord**: the last 24 hours (new emails per category, comparisons cleared, sent to human review) and what is open now (needs human review, unread, failed ingestion rows). Plain counting in a Code node, **no LLM**, and "needs review" follows the same rules as the dashboard | one message |
 
@@ -439,7 +433,7 @@ Both have dropdown filters (**Action** and **User**) whose choice lives in the U
 - **Session:** the cookie is HttpOnly, SameSite=Lax, `Secure` in production, HMAC-SHA256-signed with `SESSION_SECRET` and expires after 12 hours. It is signed, not encrypted: the id, name, role and expiry inside are readable but cannot be forged or edited. Without a valid one the app pages redirect to the front page and `/api/*` answers `401`.
 - **Known gaps:** the scrypt cost is Node's default, below OWASP's current N=2^17 (raising it means storing the cost next to each hash so existing ones keep working). There is no log in attempt limit or server-side session revocation yet.
 - **Write safety:** moderator writes use Firestore preconditions and one atomic commit, so concurrent edits fail loudly instead of corrupting data.
-- **Third-party calls:** `/api/sea-routes` accepts at most 20 port pairs of under 200 characters each. Port names (never email content) are sent to OpenStreetMap's public Nominatim service with an identifying User-Agent, as its usage policy asks.
+- **Third-party calls:** `/api/sea-routes` accepts at most 20 port pairs of under 200 characters each. Port names (never email content) are sent to OpenStreetMap's public Nominatim service with an identifying User-Agent, and the globe credits *"Geocoding data provided by OpenStreetMap"*, as its usage policy asks.
 - **Alerts:** review alerts carry sender-controlled text, so `@` is defused before posting (no `@everyone` pings) and the message is capped in length.
 
 ---
@@ -526,56 +520,40 @@ Being honest about what this version does **not** do yet:
 
 ## 9. Future roadmap
 
-### Shipped since the last roadmap
+Three directions, taking Shiptuationship from a document checker to part of how a shipping company already runs.
 
-- **Image OCR:** image attachments now go through Google Vision, alongside scanned PDFs.
-- **Access control:** moderator and read-only auditor roles, enforced in `proxy.ts` and again in every write route.
-- **Alerts:** instant review alerts and a daily 8:00 report on Telegram and Discord.
-- **Shipments:** emails grouped by vessel and voyage, with the sea route of each leg on a 3D globe.
-- **Review:** SI and BL edited and saved together, *Reset to Original*, and *Clear & Validate* for flagged non-comparison emails.
-- **Audit:** the System Log shows the full field-by-field comparison, including the UN/LOCODE verdicts.
-- **Quality:** a 464-test Vitest suite covering the route handlers, components, libraries and n8n exports.
+### 9.1 Enterprise observability: Prometheus / Grafana / SAP integration
 
-### Phase 1: Harden (next)
-
-Small changes that close the gaps listed in [Known limitations](#8-known-limitations) and in [5.7](#57-security-and-safety).
+Today the pipeline's health lives in the n8n execution log, the dashboard and the 8:00 daily report. An operations team needs it next to its other systems, and the results need to reach the system of record.
 
 | Item | What | Why |
 |------|------|-----|
-| **CI** | Run `npm test` and `npx tsc --noEmit` on every push and pull request (GitHub Actions) | The test suite only runs on a developer's machine today |
-| **Retry from the app** | A *Failed ingestion* view of `ingestion_queue` rows with their `last_error`, and a moderator-only **Retry** that sets the row back to `queued` | Retrying currently means editing Firestore by hand |
-| **Login hardening** | Attempt limit per username, server-side session revocation, scrypt cost raised to N=2^17 (stored next to each hash so old hashes still work) | The three gaps named in 5.7 |
-| **Alerts that link to the email** | Point the Telegram and Discord alert at `/emails?open=<email_id>`, and move chat and channel ids into n8n variables | One tap from the alert to the review, and a fresh deployment works without editing nodes |
-| **Port positions without Nominatim** | Look up validated ports by their LOCODE in the official UN/LOCODE coordinates column (the copy embedded in the port check leaves it out), keep the positions in Firestore, and only fall back to Nominatim for the rest | Every validated port already carries a LOCODE, so a cold start stops re-geocoding them and the globe relies less on a rate-limited public service |
+| **Prometheus metrics** | Expose the pipeline's numbers for Prometheus: n8n's built-in `/metrics` endpoint, plus the counts the daily report already computes from Firestore (emails per category, `ingestion_queue` depth by status, failures, discrepancies per field, age of the oldest *Needs Review* email) | The ~4 s / ~20 s timings in [7.1](#71-headline-results) were read by hand from the execution log; metrics make them continuous |
+| **Grafana dashboards and alerts** | Dashboards for throughput, run time, failure rate and review backlog, with alert rules (queue stuck, failures rising, backlog ageing) sent to the same Telegram and Discord channels | A stalled drain or a failing model is seen in minutes, not at the next morning's report |
+| **SAP integration** | Write each comparison result (cleared or flagged, with its discrepancies) onto the matching shipment in SAP (S/4HANA or SAP TM), and read booking data back to match emails to shipments | The result lands where the shipment is managed, not in a separate app |
 
-### Phase 2: Accuracy and coverage
+### 9.2 RAG-based LLM: a cross-reference database
 
-| Item | What | Why |
-|------|------|-----|
-| **One comparison engine** | Move *Compare Fields* and *Check Port Code* into one shared module used by both n8n and `/api/emails/{id}/review` | A moderator's save would get the same normalisation and UN/LOCODE check as the pipeline |
-| **Scanned DOCX** | Pull embedded page images out of `word/media/` and send them to Vision | The last common format that still ends as an attachment error |
-| **Several SI/BL pairs per email** | Store and compare every pair, with one comparison per pair | Some requests bundle multiple bookings |
-| **Vessel and voyage extracted at ingestion** | Ask the extractor for them and store them, keeping today's pattern as the fallback | Emails that write the voyage differently would still appear under Shipments |
-| **Confidence-based review** | Have the extractor return per-field confidence and send low-confidence fields to review even when they match | Catches a confident-looking wrong read on both documents |
-| **Drive links for every attachment** | Record `drive_link` for all attachments, not only the SI and BL | Reviewers can open any file from the email |
-
-### Phase 3: Operations
+The comparison checks the SI against the BL, and the UN/LOCODE registry is its only outside source of truth. Every moderator correction is already kept (`review.*` and the `activity` records) but never used again.
 
 | Item | What | Why |
 |------|------|-----|
-| **Live updates** | Push changes to the browser (Firestore listeners or server-sent events) instead of the 30 s poll | Two moderators see each other's saves at once, and fewer `409` conflicts |
-| **Assignment and SLAs** | Assign each Needs Review email to a moderator, show its age, and include overdue items in the alerts and daily report | Nothing waiting in the queue is forgotten |
-| **Voyage status** | Show on each Shipments row whether the voyage is fully cleared or blocked, and export a voyage's discrepancy report | Answers "can this sailing go?" in one glance |
-| **Parallel ingestion** | Several drain workers, relying on the atomic claims that already exist | Lifts the 20-files-a-minute serial ceiling for large drops |
+| **Cross-reference database** | Store every validated SI/BL, the moderator corrections, known parties with their spellings, and the UN/LOCODE registry as embeddings in a vector database | One place holding what is known to be correct, built from data the app already writes |
+| **Retrieval-grounded extraction and review** | Before extracting or comparing, retrieve the closest past documents and parties and add them to the prompt: resolve a party's usual name, suggest the intended code for an `ambiguous` or `mismatch` port, and flag values that break a shipper's history (for example a weight far outside its usual range) | Catches errors where the SI and BL agree with each other but not with reality, and each suggestion cites the record it came from |
+| **RAG chatbot** | Operators ask in plain language ("which of shipper X's shipments had a weight mismatch last month?") and get an answer with links to the source emails | Answers come from stored records, not the model's memory, and need no CSV export |
 
-### Phase 4: Platform
+The comparison itself stays plain code: retrieval adds evidence and suggestions, and a person still confirms any change.
+
+### 9.3 Beyond SI and BL: packing lists / invoices / EDI + APIs
+
+A shipment carries more than two documents, and many partners already exchange structured data instead of PDFs.
 
 | Item | What | Why |
 |------|------|-----|
-| **Direct intake** | Read Gmail/IMAP straight into the queue, without the Drive hop | One fewer moving part between an email and its result |
-| **More document types** | Commercial invoices, packing lists and certificates of origin, each with its own field set | Grows from SI/BL checking into full document checking |
-| **Discrepancy analytics** | Trends by shipper, port and field over time | Shows which counterparties keep sending wrong documents |
-| **Multi-tenant** | Isolated data per organisation, with configurable fields and matching rules | Lets more than one team use one deployment |
+| **Packing lists** | Extract the line items (pieces, net and gross weight, dimensions, CBM) and check their totals against the SI and BL gross weight and container count | The line-level source that the SI and BL weights are supposed to add up from |
+| **Commercial invoices** | Extract consignee, HS codes, quantities and totals, and cross-check them against the packing list and the SI | Invoices are prepared separately and drift from the shipping documents, which delays customs clearance |
+| **Multi-document comparison** | One comparison per shipment across SI, BL, packing list and invoice, each document with its own field set, shown side by side like today | One discrepancy report per shipment instead of per document pair |
+| **EDI + APIs** | Accept EDIFACT messages (such as IFTMIN shipping instructions) and carrier APIs (DCSA Booking and eBL standards) alongside email, and offer a REST API to submit documents and read results | Structured data skips OCR and LLM extraction entirely, and other systems (including SAP, [9.1](#91-enterprise-observability-prometheus--grafana--sap-integration)) can call the checker directly |
 
 ---
 
@@ -628,7 +606,7 @@ npm run build && npm run start
 Tests and type-check:
 
 ```bash
-npm test              # Vitest, 464 tests, no network or Firestore needed
+npm test              # Vitest, 469 tests, no network or Firestore needed
 npx tsc --noEmit      # type-check only
 ```
 
@@ -643,8 +621,6 @@ npx tsc --noEmit      # type-check only
 | `SESSION_SECRET` | yes | Signs the login cookie. Any random string of 32+ characters: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Changing it logs everyone out |
 | `N8N_AUTO_REPLY_WEBHOOK_URL` | yes, for auto replies | Production URL of the active n8n `auto-reply` webhook |
 | `NEXT_PUBLIC_SITE_URL` | no | Public address of the deployed site. Defaults to `http://localhost:3000`. Optional; **add it in `.env.local` if you're deploying somewhere other than `localhost:3000`** |
-
-> **Never commit `.env.local`.** It is already listed in `.gitignore`. Keep secrets out of screenshots, issues and commits.
 
 ### 10.4 Getting the Google refresh token (one time)
 
@@ -684,7 +660,7 @@ npx tsc --noEmit      # type-check only
 8. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
 9. Drop email JSON files into the Drive `/inbox` folder, by hand or via `gmail-ship-to-drive`. Within a minute or two they appear in Firestore, then in the app. The auto-reply workflow runs only when a moderator clicks **Generate auto reply**.
 10. **Optional — Telegram and Discord (review alerts and daily report):**
-    - **Telegram:** create a bot with [@BotFather](https://t.me/BotFather) and add its token as a Telegram credential in n8n. Send the bot a message (or add it to a group), then open `https://api.telegram.org/bot<token>/getUpdates` and copy `message.chat.id`. Select the credential and replace `YOUR_TELEGRAM_CHAT_ID` with that id on **Send Review Alert** (`ingestion`) and **Send Report** (`daily-report`).
+    - **Telegram:** create a bot with [@BotFather](https://t.me/BotFather) and add its token as a Telegram credential in n8n. Send the bot a message (or add it to a group), then open `https://api.telegram.org/bot<token>/getUpdates` and copy `message.chat.id`. Select the credential and put that id in **Chat ID** on **Send Review Alert** (`ingestion`, the export holds ours) and **Send Report** (`daily-report`, replace `YOUR_TELEGRAM_CHAT_ID`). Both are sent without n8n's attribution line.
     - **Discord:** add a Discord Bot credential, then on **Send Discord Review Alert** (`ingestion`) and **Send Discord Report** (`daily-report`) pick **your** server and channel (the export points at ours).
     - **Link:** the alert text in **Build Review Alert** links to `https://shiptuationship.vercel.app/emails`; change it to your deployment's address.
     - Remove the Telegram or Discord node if you only want one of them. Click **Execute workflow** on `daily-report` once to check the message arrives, then activate it. To change the send time, edit **Daily 8am** and the workflow timezone (**Settings → Timezone**) together with the `TZ` constant in **Build Report**, which only labels the date.
@@ -704,6 +680,7 @@ NODE_OPTIONS=--max-old-space-size=4096       # bigger heap (give the container a
 Shiptuationship
 ├─ app/                        Next.js App Router
 │  ├─ page.tsx                 Front page (product site) for logged-out visitors
+│  ├─ login/                   Log in page (logged-in visitors go straight to the dashboard)
 │  ├─ dashboard/               Dashboard
 │  ├─ emails/                  Inbox page
 │  ├─ shipments/               Voyages list, and one voyage's globe and emails (?voyage=)
@@ -718,7 +695,7 @@ Shiptuationship
 │  │  └─ session/              POST log in, DELETE log out
 │  ├─ layout.tsx               Metadata, Open Graph, theme and scale bootstrap, session-aware shell
 │  └─ globals.css              All styling and the colour schemes
-├─ components/                 Landing (front page), LogInButton, Profile (menu), Dashboard, Emails, Shipments, VoyageGlobe, ReviewModal, AuditLog, charts, maps, shell…
+├─ components/                 Landing (front page), LogIn, LogInButton, Profile (menu), Dashboard, Emails, Shipments, VoyageGlobe, ReviewModal, AuditLog, charts, maps, shell…
 ├─ lib/
 │  ├─ firestore.ts             Server-only Firestore REST client (OAuth, mapping, moderator actions, audit feed)
 │  ├─ shipments.ts             Types, the 7 fields, the UI comparison, vessel/voyage parsing, date helpers
