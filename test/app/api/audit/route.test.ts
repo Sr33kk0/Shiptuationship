@@ -37,16 +37,26 @@ describe("GET /api/audit", () => {
 
   it("returns both logs for one email, newest first", async () => {
     list.mockImplementation(async (source) => (source === "user" ? [{ id: "u", at: "2026-03-05T02:00:00Z" }] : [{ id: "s1", at: "2026-03-05T03:00:00Z" }, { id: "s2", at: "2026-03-05T01:00:00Z" }]) as never);
-    const res = await get("?email=email%2F2");
+    const res = await get("?email=email_2");
     expect(res.status).toBe(200);
     expect((await res.json()).map((e: { id: string }) => e.id)).toEqual(["s1", "u", "s2"]);
-    expect(list.mock.calls).toEqual([["user", "email/2"], ["system", "email/2"]]);
+    expect(list.mock.calls).toEqual([["user", "email_2"], ["system", "email_2"]]);
   });
 
-  it("reports a Firestore failure as 502", async () => {
+  it("rejects invalid email paths before contacting Firestore", async () => {
+    for (const id of ["", ".", "..", "../moderators/admin", "email/2", "email?x=y"]) {
+      expect((await get(`?email=${encodeURIComponent(id)}`)).status).toBe(400);
+    }
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it("reports a Firestore failure as a generic 502, keeping the detail in the server logs", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     list.mockRejectedValue(new Error("Firestore 500: down"));
     const res = await get("?source=user");
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ error: "Firestore 500: down" });
+    expect(await res.json()).toEqual({ error: "Could not load audit log. Please try again." });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });

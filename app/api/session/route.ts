@@ -3,6 +3,7 @@ import { findModerator } from "@/lib/firestore";
 import { SESSION_COOKIE, checkPassword, createSession } from "@/lib/session";
 
 const fail = (error: string, status: number) => Response.json({ error }, { status });
+const NO_USER = `${"0".repeat(32)}:${"0".repeat(128)}`; // a well-formed hash no password matches in practice
 
 // Log in with the username and password of a `moderators` document (moderator or auditor, by its `role`). The only route proxy.ts lets through without a session.
 // ponytail: no attempt limit, scrypt slows guessing; add a per-username lockout in Firestore if the app goes public
@@ -24,7 +25,8 @@ export async function POST(req: Request) {
     console.error("Log in: moderator lookup failed", e); // the visitor gets a generic message; the reason goes to the server logs
     return fail("Could not log in. Please try again.", 502);
   }
-  if (!moderator?.passwordHash || !checkPassword(password, moderator.passwordHash)) return fail("Wrong username or password", 401);
+  // Hash against a dummy when there is no such user, so response time does not reveal which usernames exist.
+  if (!checkPassword(password, moderator?.passwordHash || NO_USER) || !moderator?.passwordHash) return fail("Wrong username or password", 401);
 
   const res = new NextResponse(null, { status: 204 });
   // No maxAge: the cookie ends when the browser closes, and the signed expiry inside it ends it after 12 h regardless.

@@ -5,6 +5,15 @@ import { SESSION_COOKIE, readSession } from "@/lib/session";
 // A session counts only if its cookie is signed and unexpired (lib/session.ts). /api/session is open, it is how you log in and out.
 // Auditors are read-only: anything but GET or HEAD (every write, the AI reply, any future server action) answers 403.
 export function proxy(req: NextRequest) {
+  // SameSite cookies still accompany requests from sibling subdomains. Check the
+  // full origin for every write, including login/logout, before any route runs.
+  if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    const origin = req.headers.get("origin");
+    if ((origin !== null && origin !== req.nextUrl.origin) ||
+        ["cross-site", "same-site"].includes(req.headers.get("sec-fetch-site") ?? "")) {
+      return NextResponse.json({ error: "Cross-origin requests are not allowed" }, { status: 403 });
+    }
+  }
   if (req.nextUrl.pathname === "/api/session") return NextResponse.next();
   const session = readSession(req.cookies.get(SESSION_COOKIE)?.value);
   if (!session) {
