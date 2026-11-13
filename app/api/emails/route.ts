@@ -6,6 +6,7 @@ export async function GET() {
   try {
     return Response.json(await listEmails());
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 502 });
+    console.error("Emails: Firestore read failed", e); // the detail stays in the server logs
+    return Response.json({ error: "Could not load emails. Please try again." }, { status: 502 });
   }
 }

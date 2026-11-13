@@ -4,6 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
+        "authentication": "headerAuth",
         "path": "generate-auto-reply",
         "responseMode": "responseNode",
         "options": {}

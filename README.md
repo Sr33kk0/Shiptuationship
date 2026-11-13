@@ -620,6 +620,7 @@ npx tsc --noEmit      # type-check only
 | `FIRESTORE_PROJECT_ID` | yes | Firestore project ID |
 | `SESSION_SECRET` | yes | Signs the login cookie. Any random string of 32+ characters: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Changing it logs everyone out |
 | `N8N_AUTO_REPLY_WEBHOOK_URL` | yes, for auto replies | Production URL of the active n8n `auto-reply` webhook |
+| `N8N_AUTO_REPLY_WEBHOOK_SECRET` | yes, for auto replies | Random secret of 32+ characters matching the n8n webhook Header Auth credential (`X-Auto-Reply-Secret`) |
 | `NEXT_PUBLIC_SITE_URL` | no | Public address of the deployed site. Defaults to `http://localhost:3000`. Optional; **add it in `.env.local` if you're deploying somewhere other than `localhost:3000`** |
 
 ### 10.4 Getting the Google refresh token (one time)
@@ -655,8 +656,8 @@ npx tsc --noEmit      # type-check only
 3. In `ingestion-drain`, open the **Ingest Email** node and **re-select the `ingestion` workflow** (the export does not carry the workflow id).
 4. Point the Drive nodes at **your** `/inbox` and `/attachments` folders.
 5. **Optional — Gmail intake:** in `gmail-ship-to-drive`, select your Gmail and Drive credentials, run it once manually (it creates the `ship-exported` label automatically), check Drive for the uploaded files, then activate it. Skip this workflow if you'd rather drop files into Drive by hand.
-6. In `auto-reply`, select your Google Vertex credential and project on the **Google Vertex Chat Model** node, then activate the workflow.
-7. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL` and restart the web app.
+6. In `auto-reply`, select your Google Vertex credential and project on the **Google Vertex Chat Model** node. On **Generate Auto Reply**, keep **Authentication: Header Auth** and create/select a Header Auth credential with **Name: `X-Auto-Reply-Secret`** and **Value:** a random secret of 32+ characters. Then activate the workflow. Header Auth must also be enabled on existing deployed workflows; updating this repository alone does not secure a live webhook.
+7. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL`, set `N8N_AUTO_REPLY_WEBHOOK_SECRET` to the same credential value, and restart the web app.
 8. **Activate** `ingestion-trigger` and `ingestion-drain`. (`ingestion` is a sub-workflow and stays inactive.)
 9. Drop email JSON files into the Drive `/inbox` folder, by hand or via `gmail-ship-to-drive`. Within a minute or two they appear in Firestore, then in the app. The auto-reply workflow runs only when a moderator clicks **Generate auto reply**.
 10. **Optional — Telegram and Discord (review alerts and daily report):**

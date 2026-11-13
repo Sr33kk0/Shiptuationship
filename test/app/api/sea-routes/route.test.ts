@@ -34,10 +34,13 @@ describe("GET /api/sea-routes", () => {
     expect(geocode).not.toHaveBeenCalled();
   });
 
-  it("reports a geocoding or network failure as 502", async () => {
+  it("reports a geocoding or network failure as a generic 502, keeping the detail in the server logs", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(geocode).mockRejectedValue(new Error("Geocoding failed (503)"));
     const res = await get("from=A&to=B");
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ error: "Geocoding failed (503)" });
+    expect(await res.json()).toEqual({ error: "Could not load sea routes. Please try again." });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });
