@@ -10,6 +10,7 @@ const n8n = vi.fn();
 beforeEach(() => {
   n8n.mockReset();
   vi.stubEnv("N8N_AUTO_REPLY_WEBHOOK_URL", "https://n8n.example/webhook/reply");
+  vi.stubEnv("N8N_AUTO_REPLY_WEBHOOK_SECRET", "test-webhook-secret-at-least-32-characters");
   vi.stubGlobal("fetch", n8n);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -31,6 +32,8 @@ describe("POST /api/auto-reply", () => {
     const [url, init] = n8n.mock.calls[0];
     expect(url).toBe("https://n8n.example/webhook/reply");
     expect(init).toMatchObject({ method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store" });
+    expect(init.headers["X-Auto-Reply-Secret"]).toBe("test-webhook-secret-at-least-32-characters");
+    expect(init.redirect).toBe("error");
     expect(JSON.parse(init.body)).toEqual(payload);
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
@@ -53,6 +56,14 @@ describe("POST /api/auto-reply", () => {
   it("explains a missing webhook setting", async () => {
     vi.stubEnv("N8N_AUTO_REPLY_WEBHOOK_URL", "");
     expect(await read(await post({ email }))).toEqual([503, { error: "AI Reply is not configured. Set N8N_AUTO_REPLY_WEBHOOK_URL." }]);
+  });
+
+  it("fails closed without a strong webhook credential", async () => {
+    for (const secret of ["", "short"]) {
+      vi.stubEnv("N8N_AUTO_REPLY_WEBHOOK_SECRET", secret);
+      expect((await post({ email })).status).toBe(503);
+    }
+    expect(n8n).not.toHaveBeenCalled();
   });
 
   it("returns a generic 502 when n8n fails, errors or replies with nothing", async () => {

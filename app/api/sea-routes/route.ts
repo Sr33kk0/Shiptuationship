@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     );
     return Response.json(legs);
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 502 });
+    console.error("Sea routes: lookup failed", e); // the detail stays in the server logs
+    return Response.json({ error: "Could not load sea routes. Please try again." }, { status: 502 });
   }
 }

@@ -18,11 +18,14 @@ export async function POST(req: Request) {
 
   const webhook = process.env.N8N_AUTO_REPLY_WEBHOOK_URL;
   if (!webhook) return bad("AI Reply is not configured. Set N8N_AUTO_REPLY_WEBHOOK_URL.", 503);
+  const secret = process.env.N8N_AUTO_REPLY_WEBHOOK_SECRET;
+  if (!secret || secret.length < 32) return bad("AI Reply webhook authentication is not configured.", 503);
 
   try {
     const response = await fetch(webhook, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Auto-Reply-Secret": secret },
+      redirect: "error", // Never forward the shared secret or email data to a redirect target.
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(60_000),
       cache: "no-store",

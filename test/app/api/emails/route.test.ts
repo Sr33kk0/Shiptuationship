@@ -22,10 +22,13 @@ describe("GET /api/emails", () => {
     expect(await res.json()).toEqual([{ id: "email_001" }]);
   });
 
-  it("reports a Firestore failure as 502", async () => {
+  it("reports a Firestore failure as a generic 502, keeping the detail in the server logs", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     list.mockRejectedValue(new Error("Missing GOOGLE_CLIENT_ID"));
     const res = await GET();
     expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ error: "Missing GOOGLE_CLIENT_ID" });
+    expect(await res.json()).toEqual({ error: "Could not load emails. Please try again." });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 });
