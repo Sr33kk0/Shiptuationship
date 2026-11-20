@@ -10,6 +10,34 @@ const request = (path: string, cookie?: string, method = "GET") =>
   new NextRequest(`http://localhost${path}`, { method, headers: cookie === undefined ? {} : { cookie: `${SESSION_COOKIE}=${cookie}` } });
 
 describe("proxy", () => {
+  it("blocks cross-origin writes, including login and logout from sibling subdomains", () => {
+    for (const path of ["/api/session", "/api/emails/email_001/read", "/api/auto-reply"]) {
+      for (const method of ["POST", "DELETE"]) {
+        const cases: Record<string, string>[] = [
+          { origin: "https://evil.example" },
+          { origin: "http://evil.localhost" },
+          { origin: "null" },
+          { "sec-fetch-site": "cross-site" },
+          { "sec-fetch-site": "same-site" },
+        ];
+        for (const headers of cases) {
+          const req = new NextRequest(`http://localhost${path}`, {
+            method, headers: { ...headers, cookie: `${SESSION_COOKIE}=${valid}` },
+          });
+          expect(proxy(req).status).toBe(403);
+        }
+      }
+    }
+  });
+
+  it("allows same-origin writes and clients without browser origin headers", () => {
+    const cases: Record<string, string>[] = [{ origin: "http://localhost", "sec-fetch-site": "same-origin" }, {}];
+    for (const headers of cases) {
+      const req = new NextRequest("http://localhost/api/session", { method: "POST", headers });
+      expect(proxy(req).headers.get("x-middleware-next")).toBe("1");
+    }
+  });
+
   it("lets logged-in visitors through", () => {
     expect(proxy(request("/dashboard", valid)).headers.get("x-middleware-next")).toBe("1");
     expect(proxy(request("/api/emails", valid)).headers.get("x-middleware-next")).toBe("1");

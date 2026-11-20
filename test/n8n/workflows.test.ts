@@ -45,7 +45,7 @@ describe("auto-reply workflow", () => {
   const node = (type: string) => workflows["auto-reply"].nodes.find((n) => n.type.endsWith(type))!;
 
   it("takes a POST on the webhook the app calls and answers from a respond node", () => {
-    expect(node(".webhook").parameters).toMatchObject({ httpMethod: "POST", path: "generate-auto-reply", responseMode: "responseNode" });
+    expect(node(".webhook").parameters).toMatchObject({ httpMethod: "POST", authentication: "headerAuth", path: "generate-auto-reply", responseMode: "responseNode" });
   });
 
   it("returns the reply as { body }, which /api/auto-reply reads", () => {
