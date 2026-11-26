@@ -15,29 +15,40 @@ const Ctx = createContext<State | null>(null);
 // One fetch + poll for the whole app, so moving between pages shows the data straight away instead of reloading it.
 // ponytail: 30s poll; swap for SSE/onSnapshot if latency matters.
 export function ShipmentsProvider({ children }: { children: ReactNode }) {
-  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [shipments, setRows] = useState<Shipment[]>([]);
   const [loadState, setLoadState] = useState<State["loadState"]>("loading");
   const busy = useRef(false);
+  // Bumped by every local edit, so a poll that was already in flight when a save landed cannot put the old row back.
+  const edits = useRef(0);
+  const setShipments: State["setShipments"] = (value) => {
+    edits.current++;
+    setRows(value);
+  };
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      const seen = edits.current;
       try {
         const res = await fetch("/api/emails");
         if (!res.ok) throw new Error(await res.text());
         const data: Shipment[] = await res.json();
         if (!alive) return;
-        if (!busy.current) setShipments(data);
+        if (!busy.current && edits.current === seen) setRows(data);
         setLoadState("ready");
       } catch {
         if (alive) setLoadState((s) => (s === "ready" ? s : "error"));
       }
     };
     load();
-    const poll = window.setInterval(load, 30_000);
+    // A hidden tab does not poll (each poll reads every email from Firestore); it catches up as soon as it is shown again.
+    const poll = window.setInterval(() => document.hidden || load(), 30_000);
+    const onShow = () => document.hidden || load();
+    document.addEventListener("visibilitychange", onShow);
     return () => {
       alive = false;
       clearInterval(poll);
+      document.removeEventListener("visibilitychange", onShow);
     };
   }, []);
 

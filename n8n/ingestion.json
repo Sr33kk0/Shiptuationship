@@ -1128,7 +1128,8 @@
         "chatId": "YOUR_TELEGRAM_CHAT_ID",
         "text": "={{ $json.text }}",
         "additionalFields": {
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
         }
       },
       "type": "n8n-nodes-base.telegram",
@@ -1148,7 +1149,7 @@
         }
       },
       "onError": "continueRegularOutput",
-      "notes": "Select your Telegram bot credential and set Chat ID. No parse mode: email subjects would break Markdown. Continues on error so a chat outage never fails ingestion."
+      "notes": "Select your Telegram bot credential and set Chat ID. Legacy Markdown parse mode: Build Review Alert escapes sender text and wraps fields in code spans. Continues on error so a chat outage never fails ingestion."
     },
     {
       "parameters": {

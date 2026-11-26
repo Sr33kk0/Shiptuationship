@@ -6,7 +6,8 @@ import { currentModerator } from "@/lib/session";
 import { ShipmentsProvider } from "@/lib/useShipments";
 import "./globals.css";
 
-const figtree = Figtree({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font" });
+// No weight list: Figtree is a variable font, so one file covers every weight (400-800) instead of one download per weight.
+const figtree = Figtree({ subsets: ["latin"], variable: "--font" });
 
 // Absolute address of the site, used to turn the preview image path into a full URL in the og:image tag.
 // Set NEXT_PUBLIC_SITE_URL to the deployed address (e.g. https://shiptuationship.example.com); it falls back to localhost for development.

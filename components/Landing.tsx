@@ -96,7 +96,7 @@ export default function Landing() {
         <div className="site-wrap site-nav-in">
           <a className="site-brand" href="/" aria-label="Shiptuationship, home">
             <div className="logo">
-              <img src="/shiplogo.svg" alt="" />
+              <img src="/shiplogo.svg" alt="" width={36} height={36} />
             </div>
             <span>Shiptuationship</span>
           </a>

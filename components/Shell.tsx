@@ -127,7 +127,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </button>
           <NavLink href="/dashboard" className="topbar-home" aria-label="Shiptuationship, go to the dashboard">
             <div className="logo sm">
-              <img src="/shiplogo.svg" alt="" />
+              <img src="/shiplogo.svg" alt="" width={36} height={36} />
             </div>
             <span className="topbar-title trunc">Shiptuationship</span>
           </NavLink>
@@ -141,7 +141,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <div className="sb-head">
               <NavLink href="/dashboard" className="brand" title="Go to the dashboard" aria-label="Shiptuationship, go to the dashboard">
                 <div className="logo">
-                  <img src="/shiplogo.svg" alt="" />
+                  <img src="/shiplogo.svg" alt="" width={36} height={36} />
                 </div>
                 {!compact && (
                   <div style={{ minWidth: 0 }}>

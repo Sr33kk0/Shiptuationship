@@ -49,6 +49,31 @@ describe("ShipmentsProvider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("skips polls while the tab is hidden and catches up when it is shown", async () => {
+    const fetchMock = vi.fn(async () => ok(["a"]));
+    vi.stubGlobal("fetch", fetchMock);
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    mount();
+    await flush();
+    await act(async () => vi.advanceTimersByTime(90_000));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    hidden.mockReturnValue(false);
+    await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    hidden.mockRestore();
+  });
+
+  it("drops a poll that was in flight when a save landed", async () => {
+    let answer!: (r: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(["a"])).mockReturnValueOnce(new Promise<Response>((r) => (answer = r))));
+    mount();
+    await flush();
+    await act(async () => vi.advanceTimersByTime(30_000)); // poll starts
+    act(() => latest.setShipments([shipment({ id: "saved" })])); // a save lands while it is in flight
+    await act(async () => answer(ok(["stale"])));
+    expect(screen.getByText("ready:saved")).toBeTruthy();
+  });
+
   it("does not overwrite rows while a save is in flight", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(["a"])).mockResolvedValueOnce(ok(["stale"])));
     mount();

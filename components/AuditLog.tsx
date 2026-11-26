@@ -126,7 +126,7 @@ function Entries({ events }: { events: AuditEvent[] }) {
         {divider && <div className="day"><span>{dayLabel(day)}</span></div>}
         <div className="ev">
           <div className="ev-avatar" style={e.bot ? undefined : ({ "--h": hue(e.actor) } as React.CSSProperties)} data-bot={e.bot || undefined}>
-            {e.bot ? <img src="/shiplogo.svg" alt="" /> : initials(e.actor)}
+            {e.bot ? <img src="/shiplogo.svg" alt="" width={24} height={24} /> : initials(e.actor)}
             <span className="ev-badge" style={{ background: kind.color }} title={kind.label}>
               <Icon d={kind.icon} size={10} sw={3} />
             </span>
@@ -234,10 +234,14 @@ export default function AuditLog({ source }: { source: AuditSource }) {
       }
     };
     load();
-    const poll = window.setInterval(load, 30_000);
+    // Like the email poll (lib/useShipments.tsx): a hidden tab does not poll, and catches up when shown.
+    const poll = window.setInterval(() => document.hidden || load(), 30_000);
+    const onShow = () => document.hidden || load();
+    document.addEventListener("visibilitychange", onShow);
     return () => {
       alive = false;
       clearInterval(poll);
+      document.removeEventListener("visibilitychange", onShow);
     };
   }, [source]);
 
