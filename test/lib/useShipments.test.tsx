@@ -63,6 +63,17 @@ describe("ShipmentsProvider", () => {
     hidden.mockRestore();
   });
 
+  it("drops a poll that was in flight when a save landed", async () => {
+    let answer!: (r: Response) => void;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(["a"])).mockReturnValueOnce(new Promise<Response>((r) => (answer = r))));
+    mount();
+    await flush();
+    await act(async () => vi.advanceTimersByTime(30_000)); // poll starts
+    act(() => latest.setShipments([shipment({ id: "saved" })])); // a save lands while it is in flight
+    await act(async () => answer(ok(["stale"])));
+    expect(screen.getByText("ready:saved")).toBeTruthy();
+  });
+
   it("does not overwrite rows while a save is in flight", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok(["a"])).mockResolvedValueOnce(ok(["stale"])));
     mount();
