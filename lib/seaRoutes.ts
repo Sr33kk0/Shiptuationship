@@ -42,6 +42,7 @@ export function geocode(raw: string): Promise<Pt | null> {
   const key = raw.trim().toUpperCase();
   let found = places.get(key);
   if (!found) {
+    if (places.size >= 5000) places.clear(); // any logged-in user can send new names, so the cache must not grow without end
     found = (async () => {
       for (const q of geocodeQueries(key)) {
         const res = await politely(() => fetch(`${NOMINATIM}?${new URLSearchParams({ q, format: "jsonv2", limit: "1" })}`, { headers: { "User-Agent": USER_AGENT } }));

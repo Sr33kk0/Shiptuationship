@@ -45,8 +45,6 @@ async function fs(path: string, init: RequestInit = {}) {
   return res.json();
 }
 
-const fsGet = (path: string) => fs(path);
-
 // ---- Firestore value <-> JS -----------------------------------------------
 
 type FsValue = Record<string, unknown>;
@@ -157,7 +155,8 @@ function comparisonDetail(doc: Doc): Pick<AuditEvent, "facts" | "fields"> {
   return { facts, fields };
 }
 
-const fmtTime = (iso: unknown) =>(iso ? new Date(String(iso)).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "");
+// The team works in MYT; without a zone the server (UTC on Vercel) would print UTC times unlabelled. Same zone as lib/printEmail.ts.
+const fmtTime = (iso: unknown) => (iso ? new Date(String(iso)).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "short" }) + " MYT" : "");
 
 export function toShipment(doc: Doc): Shipment {
   const from = str(doc.from);
@@ -261,21 +260,22 @@ export function toShipment(doc: Doc): Shipment {
 
 type FsDocument = { name: string; fields?: Record<string, FsValue> };
 
-async function listDocuments(collection: string): Promise<FsDocument[]> {
+// `fields`: read only these fields (a Firestore field mask), so a big email body is not downloaded when only the subject is needed.
+async function listDocuments(collection: string, fields: string[] = []): Promise<FsDocument[]> {
   const documents: FsDocument[] = [];
   let pageToken = "";
   do {
-    const query = new URLSearchParams({ pageSize: "300" });
+    const query = new URLSearchParams([["pageSize", "300"], ...fields.map((f) => ["mask.fieldPaths", f])]);
     if (pageToken) query.set("pageToken", pageToken);
-    const page = (await fsGet(`${collection}?${query}`)) as { documents?: FsDocument[]; nextPageToken?: string };
+    const page = (await fs(`${collection}?${query}`)) as { documents?: FsDocument[]; nextPageToken?: string };
     documents.push(...(page.documents ?? []));
     pageToken = page.nextPageToken ?? "";
   } while (pageToken);
   return documents;
 }
 
-async function listEmailDocs(): Promise<Doc[]> {
-  return (await listDocuments("emails")).map((d) => decodeMap(d.fields ?? {}));
+async function listEmailDocs(fields?: string[]): Promise<Doc[]> {
+  return (await listDocuments("emails", fields)).map((d) => decodeMap(d.fields ?? {}));
 }
 
 async function listActivityDocs(): Promise<FsDocument[]> {
@@ -300,10 +300,10 @@ export async function listEmails(): Promise<Shipment[]> {
 //  "user":   every moderator action, which saveModeratorAction writes to `emails/{id}/activity`.
 // With `emailId`, only that email's entries (the Audit Log pane of the email popup), read from that one email and its own activity.
 export async function listAuditLog(source: "user" | "system", emailId?: string): Promise<AuditEvent[]> {
-  const emails = emailId ? [(await loadEmail(emailId)).before] : await listEmailDocs();
   const events: AuditEvent[] = [];
 
   if (source === "system") {
+    const emails = emailId ? [(await loadEmail(emailId)).before] : await listEmailDocs();
     for (const e of emails) {
       const emailId = str(e.email_id);
       const base = { emailId, subject: str(e.subject), actor: "n8n Workflow", bot: true, outcome: "", changes: [] };
@@ -318,7 +318,9 @@ export async function listAuditLog(source: "user" | "system", emailId?: string):
     return events.sort((a, b) => b.at.localeCompare(a.at));
   }
 
-  const [names, rows] = await Promise.all([
+  // All three reads at once; the user log needs only each email's subject.
+  const [emails, names, rows] = await Promise.all([
+    emailId ? loadEmail(emailId).then((e) => [e.before]) : listEmailDocs(["email_id", "subject"]),
     listDocuments("moderators").then((documents) =>
       Object.fromEntries(documents.map((m) => [m.name.split("/").pop()!, str(decodeMap(m.fields ?? {}).display_name)]))),
     emailId ? listDocuments(`emails/${encodeURIComponent(emailId)}/activity`) : listActivityDocs(),
@@ -372,7 +374,7 @@ type Snapshot = { name: string; fields?: Record<string, FsValue>; updateTime: st
 
 async function loadEmail(id: string): Promise<{ snapshot: Snapshot; before: Doc }> {
   try {
-    const snapshot: Snapshot = await fsGet(`emails/${encodeURIComponent(id)}`);
+    const snapshot: Snapshot = await fs(`emails/${encodeURIComponent(id)}`);
     return { snapshot, before: decodeMap(snapshot.fields ?? {}) };
   } catch (e) {
     if ((e as { status?: number }).status === 404) throw actionError("Email not found", 404);

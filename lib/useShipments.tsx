@@ -34,10 +34,14 @@ export function ShipmentsProvider({ children }: { children: ReactNode }) {
       }
     };
     load();
-    const poll = window.setInterval(load, 30_000);
+    // A hidden tab does not poll (each poll reads every email from Firestore); it catches up as soon as it is shown again.
+    const poll = window.setInterval(() => document.hidden || load(), 30_000);
+    const onShow = () => document.hidden || load();
+    document.addEventListener("visibilitychange", onShow);
     return () => {
       alive = false;
       clearInterval(poll);
+      document.removeEventListener("visibilitychange", onShow);
     };
   }, []);
 

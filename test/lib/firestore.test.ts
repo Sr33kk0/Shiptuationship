@@ -219,7 +219,7 @@ describe("toShipment", () => {
       "Marked as read by unknown reviewer",
       "Manual verification saved by DanielHo (SI & BL edited, all matched & cleared)",
     ]);
-    expect(s.auditTrail[0].time).toBe("5 Mar 2026, 01:00");
+    expect(s.auditTrail[0].time).toBe("5 Mar 2026, 09:00 MYT");
   });
 
   it("ignores a comparison stamp on an email that is not a comparison request", async () => {
@@ -390,6 +390,9 @@ describe("listAuditLog", () => {
     expect(events[3]).toMatchObject({ detail: "SI & BL", changes: [{ field: "SI Shipper", before: "A", after: "B" }, { field: "BL Port of Loading (POL)", before: "X", after: "Y" }] });
     const query = fetchMock.mock.calls.find(([u]) => String(u).endsWith(":runQuery"))!;
     expect(JSON.parse(String(query[1]!.body)).structuredQuery.from).toEqual([{ collectionId: "activity", allDescendants: true }]);
+    // only the subject is needed, so email bodies are not downloaded
+    const list = new URL(String(fetchMock.mock.calls.find(([u]) => new URL(String(u)).pathname.endsWith("/emails"))![0]));
+    expect(list.searchParams.getAll("mask.fieldPaths")).toEqual(["email_id", "subject"]);
   });
 
   it("reads only one email and its own activity when given an email", async () => {
