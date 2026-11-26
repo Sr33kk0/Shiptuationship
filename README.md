@@ -654,7 +654,7 @@ npx tsc --noEmit      # type-check only
    | Google Service Account with Vertex AI access | `ingestion` and `auto-reply` LLM nodes (`gemini-3.5-flash-lite`) |
 
 3. In `ingestion-drain`, open the **Ingest Email** node and **re-select the `ingestion` workflow** (the export does not carry the workflow id).
-4. Point the Drive nodes at **your** `/inbox` and `/attachments` folders.
+4. Point the Drive nodes at **your** `/inbox` and `/attachments` folders, and replace the `YOUR_INBOX_FOLDER_ID` and `YOUR_ATTACHMENTS_FOLDER_ID` placeholders with those folders' ids (they also appear in the **List 20 New Files** query of `ingestion-trigger` and the **Prepare Files** code of `gmail-ship-to-drive`).
 5. **Optional — Gmail intake:** in `gmail-ship-to-drive`, select your Gmail and Drive credentials, replace `YOUR_ADDRESS` in the **Find Ship Emails** search with your Gmail username, run it once manually (it creates the `ship-exported` label automatically), check Drive for the uploaded files, then activate it. Skip this workflow if you'd rather drop files into Drive by hand.
 6. In `auto-reply`, select your Google Vertex credential and project on the **Google Vertex Chat Model** node. On **Generate Auto Reply**, keep **Authentication: Header Auth** and create/select a Header Auth credential with **Name: `X-Auto-Reply-Secret`** and **Value:** a random secret of 32+ characters. Then activate the workflow. Header Auth must also be enabled on existing deployed workflows; updating this repository alone does not secure a live webhook.
 7. Copy its production webhook URL into `N8N_AUTO_REPLY_WEBHOOK_URL`, set `N8N_AUTO_REPLY_WEBHOOK_SECRET` to the same credential value, and restart the web app.
